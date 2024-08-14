@@ -1,0 +1,43 @@
+import torch
+# import torch.nn as nn
+import chess_transformer
+import pickle
+
+model = chess_transformer.ChessNet()
+state_dict = torch.load("models/chess-transform.pth")
+model.load_state_dict(state_dict)
+
+with open("data/move_encoder.pkl", "rb") as f:
+    encoder = pickle.load(f)
+
+@torch.no_grad()
+def finish_game(model, encoder, sequence=None, n_moves=20):
+    if sequence is None: 
+        sequence = ['e4']
+    encoded_seq = torch.tensor(encoder.transform(sequence)).unsqueeze(0)
+    for _ in range(n_moves):
+        next_move = model(encoded_seq).argmax(dim=1).unsqueeze(0)
+        encoded_seq = torch.cat((encoded_seq, next_move), dim=1)
+    return encoded_seq
+
+def invert_game(encoded_seq):
+    game = encoded_seq.squeeze(1).detach().numpy()
+    decoded_game = []
+    for move in game:
+        decoded_game.append(encoder.inverse_transform(move))
+    return decoded_game
+
+first = ['c4']
+encoded_game=finish_game(model,encoder, first) 
+decoded_game = invert_game(encoded_game)
+print(decoded_game)
+first = ['d4']
+encoded_game =finish_game(model,encoder, first) 
+decoded_game =invert_game(encoded_game)
+print(decoded_game)
+first = ['e4']
+encoded_game=finish_game(model,encoder, first) 
+decoded_game = invert_game(encoded_game)
+print(decoded_game)
+
+

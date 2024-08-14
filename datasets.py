@@ -17,14 +17,17 @@ def parse_pgn(game, encoder):
     return encoder.transform(moves)
 
 
-def generate_games_list():
+def generate_games_list(first_game=0, n_games=10):
     # a = time.time()
+    last_game = first_game + n_games
     with open("data/move_encoder.pkl", "rb") as f:
         encoder = pickle.load(f)
     # print(time.time() - a)
     parsed_games = []
-    with open("data/lichess_elite_2024-06.pgn") as pgn:
-        for _ in range(100):
+    with open("data/lichess_elite_2022-07.pgn") as pgn:
+        for _ in range(first_game):
+            chess.pgn.read_game(pgn)
+        for _ in range(first_game, last_game):
             game = chess.pgn.read_game(pgn)
             parsed_games.append(parse_pgn(game, encoder))
     return parsed_games
@@ -43,6 +46,4 @@ class NextMoveDataset(Dataset):
 
     def __getitem__(self, idx):
         input_sequence, target = self.data[idx]
-        return torch.tensor(input_sequence, dtype=torch.long), torch.tensor(
-            target, dtype=torch.long
-        )
+        return torch.from_numpy(input_sequence), torch.tensor(target, dtype=torch.long)

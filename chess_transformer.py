@@ -1,19 +1,10 @@
 import torch
 from torch import nn
 
-# from torch.autograd import Variable
 import torch.nn.functional as F
-
-# from torchtext import data, datasets, vocab
-# from torchtext.legacy import data, datasets, vocab
-
 import math
 
-# from argparse import ArgumentParser
-# from torch.utils.tensorboard import SummaryWriter
-
 N_VOCAB = 36726
-MAX_LENGTH = 100000
 
 
 class SelfAttention(nn.Module):
@@ -49,13 +40,10 @@ class SelfAttention(nn.Module):
         values = values.contiguous().view(b * h, t, s)
 
         raw_weights = torch.bmm(queries, keys.transpose(-1, -2))
-        print(raw_weights.shape)
 
         if mask is not None:
             mask = mask.unsqueeze(1).repeat(1, h, 1, 1)  # Extend mask for all heads
             raw_weights = raw_weights.view(b, h, t, t)
-            print(mask.shape)
-            print(raw_weights.shape)
             raw_weights = raw_weights.masked_fill(mask == 0, float("-inf")).view(
                 b * h, t, t
             )
@@ -70,7 +58,7 @@ class SelfAttention(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=5000):
+    def __init__(self, d_model, max_len=1000):
         """
         Inputs
             d_model - Hidden dimensionality of the input.
@@ -126,17 +114,18 @@ class ChessNet(nn.Module):
         self.embedder = nn.Embedding(N_VOCAB + 1, k, padding_idx=N_VOCAB)
         self.pe = PositionalEncoding(k)
         self.l1 = TransformerBlock(k, heads)
-        self.l2 = nn.Sequential(
+        self.l2 = nn.Sequential(nn.Linear(k, 4 * k), nn.ReLU(), nn.Linear(4 * k, k))
+        self.l3 = TransformerBlock(k, heads)
+        self.l4 = nn.Sequential(
             nn.Linear(k, 4 * k), nn.ReLU(), nn.Linear(4 * k, N_VOCAB)
         )
 
     def forward(self, x, mask=None):
         r = self.embedder(x)
-        print("1", r.shape)
         r = self.pe(r)
-        print("2", r.shape)
         r = self.l1(r, mask=mask)
-        print("3", r.shape)
         r = self.l2(r)
-        print("4", r.shape)
+        r = self.l3(r, mask=mask)
+        r = self.l4(r)
+        r = torch.sum(r, axis=1)
         return r
