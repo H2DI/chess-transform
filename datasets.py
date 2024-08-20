@@ -7,12 +7,6 @@ import chess.pgn
 
 from itertools import islice
 
-# import time
-
-
-def consume(iterator, n):
-    next(islice(iterator, n, n), None)
-
 
 def parse_pgn(game, encoder):
     board = game.board()
@@ -31,7 +25,9 @@ def generate_games_list(first_game=0, n_games=10):
     # print(time.time() - a)
     parsed_games = []
     with open("data/lichess_elite_2024-06.pgn") as pgn:
-        consume(pgn, n=first_game)
+        # consumes the first_game first games of the pgn iterator
+        next(islice(pgn, first_game, first_game), None)
+
         for _ in range(first_game, last_game):
             game = chess.pgn.read_game(pgn)
             parsed_games.append(parse_pgn(game, encoder))
@@ -43,7 +39,6 @@ class NextMoveDataset(Dataset):
         self.data = []
         for game in games:
             for i in range(1, len(game)):
-                # Each pair consists of (input_sequence, target)
                 self.data.append((game[:i], game[i]))
 
     def __len__(self):
