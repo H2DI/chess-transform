@@ -4,11 +4,9 @@ from torch import nn
 import torch.nn.functional as F
 import math
 
-N_VOCAB = 36726
-
 
 class SelfAttention(nn.Module):
-    def __init__(self, k, heads=2):
+    def __init__(self, k=64, heads=8):
         super().__init__()
         self.k = k
         self.heads = heads
@@ -42,7 +40,8 @@ class SelfAttention(nn.Module):
         raw_weights = torch.bmm(queries, keys.transpose(-1, -2))
 
         if mask is not None:
-            mask = mask.unsqueeze(1).repeat(1, h, 1, 1)  # Extend mask for all heads
+            max_length = max(mask.shape)
+            mask = mask.unsqueeze(1).unsqueeze(1).repeat(1, h, max_length, 1)
             raw_weights = raw_weights.view(b, h, t, t)
             raw_weights = raw_weights.masked_fill(mask == 0, float("-inf")).view(
                 b * h, t, t
@@ -58,7 +57,7 @@ class SelfAttention(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=1000):
+    def __init__(self, d_model, max_len=600):
         """
         Inputs
             d_model - Hidden dimensionality of the input.
@@ -87,10 +86,12 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, k=64, heads=4):
+    def __init__(self, k=64, heads=8):
         super().__init__()
 
-        self.attention = SelfAttention(k, heads=heads)
+        self.attention = SelfAttention(k=k, heads=heads)
+
+        self.dropout = torch.nn.Dropout(p=0.1)
 
         self.norm1 = nn.LayerNorm(k)
         self.norm2 = nn.LayerNorm(k)
@@ -99,32 +100,31 @@ class TransformerBlock(nn.Module):
 
     def forward(self, x: torch.Tensor, mask=None):
         attended = self.attention(x, mask=mask)
+        attended = self.dropout(attended)
         x = self.norm1(attended + x)
-
         fedforward = self.ff(x)
-        return self.norm2(fedforward + x)
+        result = self.norm2(fedforward + x)
+        return result
 
 
 class ChessNet(nn.Module):
-    def __init__(self, k=64, heads=4):
+    def __init__(self, n_vocab, k=64, heads=8):
         super().__init__()
         self.k = k
         self.heads = heads
 
-        self.embedder = nn.Embedding(N_VOCAB + 1, k, padding_idx=N_VOCAB)
+        self.embedder = nn.Embedding(n_vocab + 1, k, padding_idx=n_vocab)
         self.pe = PositionalEncoding(k)
         self.l1 = TransformerBlock(k, heads)
-        self.l2 = nn.Sequential(nn.Linear(k, 4 * k), nn.ReLU(), nn.Linear(4 * k, k))
+        self.l2 = TransformerBlock(k, heads)
         self.l3 = TransformerBlock(k, heads)
-        self.l4 = nn.Sequential(
-            nn.Linear(k, 4 * k), nn.ReLU(), nn.Linear(4 * k, N_VOCAB)
-        )
+        self.l4 = nn.Linear(k, n_vocab)
 
     def forward(self, x, mask=None):
         r = self.embedder(x)
         r = self.pe(r)
         r = self.l1(r, mask=mask)
-        r = self.l2(r)
+        r = self.l2(r, mask=mask)
         r = self.l3(r, mask=mask)
         r = self.l4(r)
         r = torch.sum(r, axis=1)

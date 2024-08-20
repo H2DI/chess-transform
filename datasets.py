@@ -5,12 +5,18 @@ import pickle
 import chess
 import chess.pgn
 
+from itertools import islice
+
 # import time
+
+
+def consume(iterator, n):
+    next(islice(iterator, n, n), None)
 
 
 def parse_pgn(game, encoder):
     board = game.board()
-    moves = []
+    moves = [""]
     for move in game.mainline_moves():
         moves.append(board.san(move))
         board.push(move)
@@ -24,9 +30,8 @@ def generate_games_list(first_game=0, n_games=10):
         encoder = pickle.load(f)
     # print(time.time() - a)
     parsed_games = []
-    with open("data/lichess_elite_2022-07.pgn") as pgn:
-        for _ in range(first_game):
-            chess.pgn.read_game(pgn)
+    with open("data/lichess_elite_2024-06.pgn") as pgn:
+        consume(pgn, n=first_game)
         for _ in range(first_game, last_game):
             game = chess.pgn.read_game(pgn)
             parsed_games.append(parse_pgn(game, encoder))

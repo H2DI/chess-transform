@@ -170,7 +170,7 @@ def generate_all_moves():
 
     # Combine and add checks/checkmates
     all_moves = pawn_moves + piece_moves + castling_moves
-    all_moves = add_checks_and_checkmates(all_moves)
+    all_moves = add_checks_and_checkmates(all_moves) + [""]
 
     # Remove duplicates
     return list(set(all_moves))
@@ -178,6 +178,7 @@ def generate_all_moves():
 
 move_encoder = LabelEncoder()
 move_encoder.fit(generate_all_moves())
+print(len(move_encoder.classes_))
 
 with open("data/move_encoder.pkl", "wb") as f:
     pickle.dump(move_encoder, f)
