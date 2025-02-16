@@ -129,3 +129,26 @@ class ChessNet(nn.Module):
         r = self.l4(r)
         r = torch.sum(r, axis=1)
         return r
+
+
+class ChessNet2(nn.Module):
+    def __init__(self, n_vocab, k=64):
+        super().__init__()
+        self.n_vocab = n_vocab
+        self.k = k
+
+        self.embedder = nn.Embedding(n_vocab + 1, k, padding_idx=n_vocab)
+        nn.Transformer()
+
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=k, nhead=8)
+        self.transformer_encoder = nn.TransformerEncoder(
+            self.encoder_layer, num_layers=6
+        )
+        self.prob_layer = nn.Linear(k, n_vocab)
+
+    def forward(self, x, mask=None):
+        x = self.embedder(x)
+        x = self.transformer_encoder(x, tgt_mask=mask)
+        x = self.prob_layer(x)
+        x = torch.sum(x, axis=1)
+        return x

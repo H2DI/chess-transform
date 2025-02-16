@@ -4,8 +4,8 @@ import torch.optim as optim
 
 import chess_transformer
 import datasets
-import testing_model
 
+import testing_model
 
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
@@ -22,7 +22,7 @@ N_VOCAB = len(encoder.classes_)
 N_VOCAB = 36727
 BATCH_SIZE = 64
 NUM_EPOCHS = 2
-LOAD = True
+LOAD = False
 LR = 1e-3
 
 
@@ -34,23 +34,22 @@ def collate_fn(batch):
     return inputs_padded, targets, lengths
 
 
-games_list = datasets.generate_games_list(first_game=500, n_games=1000)
-dataset = datasets.NextMoveDataset(games_list)
+games_list = datasets.generate_games_list(first_game=0, n_games=32)
+dataset = datasets.NextMoveDatasetPGN(games_list)
 dataloader = DataLoader(
     dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn
 )
-print(len(dataloader))
+
 
 games_list = datasets.generate_games_list(first_game=100, n_games=10)
-validation_set = datasets.NextMoveDataset(games_list)
+validation_set = datasets.NextMoveDatasetPGN(games_list)
 validation_dataloader = DataLoader(
     validation_set, batch_size=32, shuffle=False, collate_fn=collate_fn
 )
 
-model = chess_transformer.ChessNet()
-
+model = chess_transformer.ChessNet2(n_vocab=N_VOCAB)
 if LOAD:
-    state_dict = torch.load("models/chess-transform.pth")
+    state_dict = torch.load("models/chess-transform2.pth")
     model.load_state_dict(state_dict)
 
 
@@ -94,4 +93,4 @@ for epoch in range(NUM_EPOCHS):
     avg_loss = total_loss / len(dataloader)
     print(f"Epoch [{epoch+1}/{NUM_EPOCHS}], Loss: {avg_loss:.4f}")
     print(f"Epoch [{epoch+1}/{NUM_EPOCHS}], Validation Loss: {val_loss:.4f}")
-    torch.save(model.state_dict(), "models/chess-transform.pth")
+    torch.save(model.state_dict(), "models/chess-transform2.pth")

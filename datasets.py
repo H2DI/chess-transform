@@ -34,7 +34,7 @@ def generate_games_list(first_game=0, n_games=10):
     return parsed_games
 
 
-class NextMoveDataset(Dataset):
+class NextMoveDatasetPGN(Dataset):
     def __init__(self, games):
         self.data = []
         for game in games:
