@@ -1,49 +1,69 @@
 import torch
-from torch.utils.data import Dataset
-import pickle
+from torch.utils.data import Dataset, IterableDataset
+import csv
+import numpy as np
 
 import chess
 import chess.pgn
 
-from itertools import islice
+
+"""
+TODO: 
+sort games by  length
+filter games that end in checkmate
+"""
 
 
-def parse_pgn(game, encoder):
+def parse_pgn_game(game, encoder):
+    """
+    alternatives:
+    - add piece info
+    - encode jointly to and from
+    """
     board = game.board()
-    moves = [""]
+    moves_list = ["START"]
     for move in game.mainline_moves():
-        moves.append(board.san(move))
+        from_square = chess.square_name(move.from_square)
+        to_square = chess.square_name(move.to_square)
+        # print(from_square, to_square)
+        moves_list += [from_square, to_square]
         board.push(move)
-    return encoder.transform(moves)
+    moves_list.append("END")
+    return encoder.transform(moves_list)
 
 
-def generate_games_list(first_game=0, n_games=10):
-    # a = time.time()
-    last_game = first_game + n_games
-    with open("data/move_encoder.pkl", "rb") as f:
-        encoder = pickle.load(f)
-    # print(time.time() - a)
-    parsed_games = []
-    with open("data/lichess_elite_2024-06.pgn") as pgn:
-        # consumes the first_game first games of the pgn iterator
-        next(islice(pgn, first_game, first_game), None)
+def process_pgn_file(input_file, output_file, encoder, T=10, start_id=0):
+    with open(input_file, "r") as pgn, open(output_file, "w", newline="") as out:
+        csv_writer = csv.writer(out)
+        csv_writer.writerow(["game_id", "moves"])
 
-        for _ in range(first_game, last_game):
+        game_id = start_id
+        while True and game_id < T:
             game = chess.pgn.read_game(pgn)
-            parsed_games.append(parse_pgn(game, encoder))
-    return parsed_games
+            if game is None:
+                break
+
+            encoded_moves = parse_pgn_game(game, encoder)
+            csv_writer.writerow(
+                [game_id, " ".join([str(move) for move in encoded_moves])]
+            )
+            game_id += 1
 
 
-class NextMoveDatasetPGN(Dataset):
-    def __init__(self, games):
-        self.data = []
-        for game in games:
-            for i in range(1, len(game)):
-                self.data.append((game[:i], game[i]))
+class ChessDataset(IterableDataset):
+    def __init__(self, csv_file):
+        self.csv_file = csv_file
 
-    def __len__(self):
-        return len(self.data)
+    def parse_line(self, line):
+        game_id, moves = line.strip().split(",", 1)
+        move_list = moves.split(" ")
+        moves_tensor = torch.tensor([int(x) for x in move_list], requires_grad=False)
+        return moves_tensor
 
-    def __getitem__(self, idx):
-        input_sequence, target = self.data[idx]
-        return torch.from_numpy(input_sequence), torch.tensor(target, dtype=torch.long)
+    def __iter__(self):
+        with open(self.csv_file, "r") as f:
+            next(f)  # Skip header
+            for line in f:
+                full_line = self.parse_line(line)
+                for i in range(1, len(full_line)):
+                    yield full_line[:i]

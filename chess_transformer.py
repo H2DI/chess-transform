@@ -4,9 +4,29 @@ from torch import nn
 import torch.nn.functional as F
 import math
 
+from dataclasses import dataclass
+
+
+# @dataclass
+# class ModelConfig:
+#     block_size = 256
+#     vocab_size = 66
+#     n_layer = 128
+#     n_head = 6
+#     n_embd = 284
+
+
+@dataclass
+class ModelConfig:
+    vocab_size = 66
+    block_size = 1024
+    n_layer = 128
+    n_head = 8
+    k = 256  # k needs to be divisible by n_head
+
 
 class SelfAttention(nn.Module):
-    def __init__(self, k=64, heads=8):
+    def __init__(self, k, heads):
         super().__init__()
         self.k = k
         self.heads = heads
@@ -57,7 +77,7 @@ class SelfAttention(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=600):
+    def __init__(self, d_model, block_size):
         """
         Inputs
             d_model - Hidden dimensionality of the input.
@@ -66,18 +86,22 @@ class PositionalEncoding(nn.Module):
         super().__init__()
 
         # Create matrix of [SeqLen, HiddenDim] representing the positional encoding for max_len inputs
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        pe = torch.zeros(block_size, d_model)
+        position = torch.arange(0, block_size, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(
             torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
         )
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0)
+
+        # Modulo 2 and 4 encoding
+        pe[:, : d_model // 4] += torch.sin(2 * math.pi * position / 2)
+        pe[:, d_model // 4 : d_model // 2] += torch.cos(2 * math.pi * position / 4)
 
         # register_buffer => Tensor which is not a parameter, but should be part of the modules state.
         # Used for tensors that need to be on the same device as the module.
         # persistent=False tells PyTorch to not add the buffer to the state dict (e.g. when we save the model)
+        pe = pe.unsqueeze(0)
         self.register_buffer("pe", pe, persistent=False)
 
     def forward(self, x):
@@ -86,17 +110,17 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, k=64, heads=8):
+    def __init__(self, k, heads):
         super().__init__()
 
-        self.attention = SelfAttention(k=k, heads=heads)
+        self.attention = SelfAttention(k, heads)
 
         self.dropout = torch.nn.Dropout(p=0.1)
 
         self.norm1 = nn.LayerNorm(k)
         self.norm2 = nn.LayerNorm(k)
 
-        self.ff = nn.Sequential(nn.Linear(k, 4 * k), nn.ReLU(), nn.Linear(4 * k, k))
+        self.ff = nn.Sequential(nn.Linear(k, 4 * k), nn.GELU(), nn.Linear(4 * k, k))
 
     def forward(self, x: torch.Tensor, mask=None):
         attended = self.attention(x, mask=mask)
@@ -108,47 +132,35 @@ class TransformerBlock(nn.Module):
 
 
 class ChessNet(nn.Module):
-    def __init__(self, n_vocab, k=64, heads=8):
+    def __init__(self, config=ModelConfig):
         super().__init__()
-        self.k = k
-        self.heads = heads
-
-        self.embedder = nn.Embedding(n_vocab + 1, k, padding_idx=n_vocab)
-        self.pe = PositionalEncoding(k)
-        self.l1 = TransformerBlock(k, heads)
-        self.l2 = TransformerBlock(k, heads)
-        self.l3 = TransformerBlock(k, heads)
-        self.l4 = nn.Linear(k, n_vocab)
+        self.config = config
+        self.embedder = nn.Embedding(
+            config.vocab_size + 1, config.k, padding_idx=config.vocab_size
+        )
+        self.pe = PositionalEncoding(config.k, config.block_size)
+        self.l1 = TransformerBlock(config.k, config.n_head)
+        self.l2 = TransformerBlock(config.k, config.n_head)
+        self.l3 = TransformerBlock(config.k, config.n_head)
+        self.l4 = nn.Linear(config.k, config.vocab_size)
 
     def forward(self, x, mask=None):
-        r = self.embedder(x)
-        r = self.pe(r)
-        r = self.l1(r, mask=mask)
-        r = self.l2(r, mask=mask)
-        r = self.l3(r, mask=mask)
-        r = self.l4(r)
-        r = torch.sum(r, axis=1)
+        r = self.embedder(x)  # (batch_size, seq_len, k)
+        r = self.pe(r)  # (batch_size, seq_len, k)
+        r = self.l1(r, mask=mask)  # (batch_size, seq_len, k)
+        r = self.l2(r, mask=mask)  # (batch_size, seq_len, k)
+        r = self.l3(r, mask=mask)  # (batch_size, seq_len, k)
+        r = self.l4(r)  #  (batch_size, seq_len, vocab_size)
+        # r = torch.sum(r, axis=1)
         return r
 
 
-class ChessNet2(nn.Module):
-    def __init__(self, n_vocab, k=64):
+class Benchmark(nn.module):
+    def __init__(self, move=None):
         super().__init__()
-        self.n_vocab = n_vocab
-        self.k = k
+        if move is None:
+            move = torch.tensor([35])  # e2
+        self.move = move
 
-        self.embedder = nn.Embedding(n_vocab + 1, k, padding_idx=n_vocab)
-        nn.Transformer()
-
-        self.encoder_layer = nn.TransformerEncoderLayer(d_model=k, nhead=8)
-        self.transformer_encoder = nn.TransformerEncoder(
-            self.encoder_layer, num_layers=6
-        )
-        self.prob_layer = nn.Linear(k, n_vocab)
-
-    def forward(self, x, mask=None):
-        x = self.embedder(x)
-        x = self.transformer_encoder(x, tgt_mask=mask)
-        x = self.prob_layer(x)
-        x = torch.sum(x, axis=1)
-        return x
+    def forward(self, _):
+        return self.move
