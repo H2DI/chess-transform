@@ -31,3 +31,20 @@ def save_checkpoint(checkpoint):
     name = checkpoint["model_config"].name
     n_games = checkpoint["n_games"]
     torch.save(checkpoint, f"checkpoints/{name}/checkpoint_{n_games}.pth")
+
+
+def log_stat_group(writer, name, values, step):
+    writer.add_scalars(
+        name,
+        {
+            "min": min(values),
+            "max": max(values),
+            "avg": sum(values) / len(values),
+        },
+        step,
+    )
+
+
+# writer.add_scalar(f"{name}/min", min(values), step)
+# writer.add_scalar(f"{name}/max", max(values), step)
+# writer.add_scalar(f"{name}/avg", sum(values) / len(values), step)

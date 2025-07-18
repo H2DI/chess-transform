@@ -161,20 +161,26 @@ def check_games(model, encoder):
     print(pgn.mainline_moves())
 
 
-def test_first_moves(model, encoder, n_plies=30):
+def test_first_moves(model, encoder, n_plies=30, prints=False):
     game = chess.Board()
     first_moves = list(game.legal_moves)
+    all_number_of_bad_plies = []
+    all_first_bad_plies = []
     for move in first_moves:
         game = chess.Board()
         game.push(move)
         game, pgn, bad_plies = play_valid_game(
             model, encoder, game=game, n_plies=n_plies
         )
-        print("")
-        print(move)
-        print(
-            f"{len(bad_plies)} bad moves out of {len(game.move_stack)}. "
-            + f"First bad ply: {bad_plies[0]}"
-            if bad_plies
-            else "0 bad moves"
-        )
+        if prints:
+            print("")
+            print(move)
+            print(
+                f"{len(bad_plies)} bad moves out of {len(game.move_stack)}. "
+                + f"First bad ply: {bad_plies[0]}"
+                if bad_plies
+                else "0 bad moves"
+            )
+        all_number_of_bad_plies.append(len(bad_plies))
+        all_first_bad_plies.append(bad_plies[0] if bad_plies else len(game.move_stack))
+    return all_number_of_bad_plies, all_first_bad_plies

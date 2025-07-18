@@ -14,7 +14,7 @@ with open("data/move_encoder.pkl", "rb") as f:
     encoder = pickle.load(f)
 
 
-model_config = models.ModelConfig(name="john", n_layers=1, n_head=8)
+model_config = models.ModelConfig(name="mike", n_layers=6, n_head=4)
 # name = "Default"
 # vocab_size = 71
 # block_size = 2048
@@ -24,7 +24,7 @@ model_config = models.ModelConfig(name="john", n_layers=1, n_head=8)
 # k = 64  # k needs to be divisible by n_head
 
 model = models.ChessNet(config=model_config)
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
+optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
 scheduler = torch.optim.lr_scheduler.SequentialLR(
     optimizer,

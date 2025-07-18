@@ -16,7 +16,7 @@ import chess_seq.datasets as datasets
 import chess_seq.testing_model as testing_model
 import utils
 
-model_name = "bob"
+model_name = "john"
 
 N_VOCAB = 71
 BATCH_SIZE = 16
@@ -66,7 +66,7 @@ scheduler = torch.optim.lr_scheduler.SequentialLR(
             optimizer, start_factor=0.1, end_factor=1.0, total_iters=1000
         ),
         torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=99_000, eta_min=1e-6
+            optimizer, T_max=99_000, eta_min=0.01 * LR
         ),
     ],
     milestones=[1000],
@@ -133,6 +133,11 @@ for epoch in range(NUM_EPOCHS):
         if i % 300 == 0:
             model.eval()
             testing_model.check_games(model, encoder)
+
+            n_bad, t_first_bad = testing_model.test_first_moves(model, encoder)
+            utils.log_stat_group(writer, "Play/NumberOfBadMoves", n_bad, n_games)
+            utils.log_stat_group(writer, "Play/FirstBadMoves", t_first_bad, n_games)
+
             model.train()
             checkpoint = {
                 "model_config": model_config,

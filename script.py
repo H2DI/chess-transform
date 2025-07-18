@@ -8,9 +8,9 @@ import chess
 # import re
 
 
-model_name = "Bob"
+model_name = "john"
 
-checkpoint_path = utils.get_latest_checkpoint("Bob")
+checkpoint_path = utils.get_latest_checkpoint(model_name)
 checkpoint = torch.load(
     checkpoint_path, map_location=torch.device("cpu"), weights_only=False
 )
@@ -69,4 +69,4 @@ print(
 )
 print(pgn.mainline_moves())
 
-test_first_moves(model, encoder)
+n_bad, t_first_bad = test_first_moves(model, encoder, prints=True)
