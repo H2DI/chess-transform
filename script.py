@@ -8,23 +8,11 @@ import chess
 # import re
 
 
-model_name = "john"
+model_name = "bob"
 
-checkpoint_path = utils.get_latest_checkpoint(model_name)
-checkpoint = torch.load(
-    checkpoint_path, map_location=torch.device("cpu"), weights_only=False
-)
-
-model_config = checkpoint["model_config"]
-model = models.ChessNet(model_config)
-
-model.load_state_dict(checkpoint["model_state_dict"])
-model.eval()
-
-encoder = checkpoint["encoder"]
 
 game = chess.Board()
-game.push(chess.Move.from_uci("g1f3"))
+# game.push(chess.Move.from_uci("g1f3"))
 
 # e4
 # game.push(chess.Move.from_uci("e2e4"))

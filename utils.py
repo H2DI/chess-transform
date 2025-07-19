@@ -2,6 +2,8 @@ import os
 import re
 import torch
 
+from . import models
+
 
 def get_latest_checkpoint(model_name):
     model_dir = f"checkpoints/{model_name}/"
@@ -33,6 +35,22 @@ def save_checkpoint(checkpoint):
     torch.save(checkpoint, f"checkpoints/{name}/checkpoint_{n_games}.pth")
 
 
+def load_model(model_name):
+    checkpoint_path = get_latest_checkpoint(model_name)
+    checkpoint = torch.load(
+        checkpoint_path, map_location=torch.device("cpu"), weights_only=False
+    )
+
+    model_config = checkpoint["model_config"]
+    model = models.ChessNet(model_config)
+
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+
+    encoder = checkpoint["encoder"]
+    return model, encoder, checkpoint
+
+
 def log_stat_group(writer, name, values, step):
     writer.add_scalars(
         name,
@@ -43,8 +61,3 @@ def log_stat_group(writer, name, values, step):
         },
         step,
     )
-
-
-# writer.add_scalar(f"{name}/min", min(values), step)
-# writer.add_scalar(f"{name}/max", max(values), step)
-# writer.add_scalar(f"{name}/avg", sum(values) / len(values), step)

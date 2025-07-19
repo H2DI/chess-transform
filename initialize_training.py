@@ -4,7 +4,6 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
 
-
 import chess_seq.models as models
 import chess_seq.testing_model as testing_model
 import utils
