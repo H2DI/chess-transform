@@ -135,7 +135,7 @@ for csv_train in csv_files:
                     weight_norm = weight_norm**0.5
                     writer.add_scalar("WeightNorm/train", weight_norm, n_steps)
 
-            if i % 300 == 0:
+            if i % 250 == 0:
                 model.eval()
                 testing_model.check_games(model, encoder)
 
@@ -144,6 +144,8 @@ for csv_train in csv_files:
                 utils.log_stat_group(writer, "Play/FirstBadMoves", t_first_bad, n_games)
 
                 model.train()
+
+            if i % 1000 == 0:
                 checkpoint = {
                     "model_config": model_config,
                     "n_steps": n_steps,

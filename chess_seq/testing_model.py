@@ -80,6 +80,9 @@ def play_valid_game(model, encoder, game=None, n_plies=30):
     node = pgn_game.end()
     current_ply = 1
     bad_plies = []
+    # Remove empty fields in the PGN header
+    del pgn_game.headers["Date"]
+    del pgn_game.headers["Result"]
 
     for _ in range(n_plies):
         tokens = []
@@ -114,6 +117,7 @@ def play_valid_game(model, encoder, game=None, n_plies=30):
     return game, pgn_game, bad_plies
 
 
+@torch.no_grad()
 def play_from_tokens(tokens, game, node, encoder):
     full_move = encoder.inverse_transform(tokens)  # list of 3 strings (from, to, promo)
     full_move = "".join(full_move)
@@ -135,6 +139,7 @@ def play_from_tokens(tokens, game, node, encoder):
         return game, node, False, random_move
 
 
+@torch.no_grad()
 def check_games(model, encoder):
     game_tokens = finish_game(model, encoder, n_plies=44)
     print("\n")
@@ -161,6 +166,7 @@ def check_games(model, encoder):
     print(pgn.mainline_moves())
 
 
+@torch.no_grad()
 def test_first_moves(model, encoder, n_plies=30, prints=False):
     game = chess.Board()
     first_moves = list(game.legal_moves)

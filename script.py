@@ -1,7 +1,5 @@
 from chess_seq.testing_model import play_valid_game, test_first_moves
-import chess_seq.models as models
 import utils
-import torch
 import chess
 
 # import os
@@ -9,6 +7,7 @@ import chess
 
 
 model_name = "bob"
+model, encoder, checkpoint = utils.load_model(model_name)
 
 
 game = chess.Board()
@@ -55,6 +54,7 @@ print(
     if bad_plies
     else "0 bad moves"
 )
+print(pgn)
 print(pgn.mainline_moves())
 
 n_bad, t_first_bad = test_first_moves(model, encoder, prints=True)

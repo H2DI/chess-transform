@@ -2,7 +2,7 @@ import os
 import re
 import torch
 
-from . import models
+import chess_seq.models as models
 
 
 def get_latest_checkpoint(model_name):
@@ -36,6 +36,10 @@ def save_checkpoint(checkpoint):
 
 
 def load_model(model_name):
+    """
+    Loads model for inference.
+    Return model, encoder, checkpoint
+    """
     checkpoint_path = get_latest_checkpoint(model_name)
     checkpoint = torch.load(
         checkpoint_path, map_location=torch.device("cpu"), weights_only=False
