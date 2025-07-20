@@ -6,6 +6,7 @@ import chess.pgn
 import random
 
 from .chess_utils import parse_move, parse_board, board_to_pgn
+from .training import log_stat_group
 
 
 class InvalidMove(Exception):
@@ -190,3 +191,12 @@ def test_first_moves(model, encoder, n_plies=30, prints=False):
         all_number_of_bad_plies.append(len(bad_plies))
         all_first_bad_plies.append(bad_plies[0] if bad_plies else len(game.move_stack))
     return all_number_of_bad_plies, all_first_bad_plies
+
+
+def eval_legal_moves_and_log(model, encoder, writer, n_games):
+    model.eval()
+    check_games(model, encoder)
+
+    n_bad, t_first_bad = test_first_moves(model, encoder)
+    log_stat_group(writer, "Play/NumberOfBadMoves", n_bad, n_games)
+    log_stat_group(writer, "Play/FirstBadMoves", t_first_bad, n_games)

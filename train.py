@@ -14,12 +14,12 @@ import os
 model_name = "sarah"
 
 CHANGE_CONFIG = False
+NUM_EPOCHS = 3
 
 # Default behavior is not use the following parameters, unless CHANGE_CONFIG is True
 BATCH_SIZE = 16
 LR = 1e-4 * BATCH_SIZE / 16
 LR_MIN = 1e-6
-NUM_EPOCHS = 3
 WARMUP = 1000
 FINAL_LR_TIME = 100000
 
@@ -111,32 +111,38 @@ for file_number, csv_train in enumerate(csv_files):
                 training.log_weight_norms(writer, model, n_steps)
 
             if i % 250 == 0:
-                model.eval()
-                testing_model.check_games(model, encoder)
-
-                n_bad, t_first_bad = testing_model.test_first_moves(model, encoder)
-                training.log_stat_group(writer, "Play/NumberOfBadMoves", n_bad, n_games)
-                training.log_stat_group(
-                    writer, "Play/FirstBadMoves", t_first_bad, n_games
-                )
-
+                testing_model.eval_legal_moves_and_log(model, encoder, writer, n_games)
                 model.train()
 
             if i % 1000 == 0:
-                checkpoint = {
-                    "model_config": model_config,
-                    "training_config": training_config,
-                    "n_steps": n_steps,
-                    "n_games": n_games,
-                    "file_number": file_number,
-                    "encoder": encoder,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "scheduler_state_dict": scheduler.state_dict(),
-                }
+                training.save_checkpoint(
+                    {
+                        "model_config": model_config,
+                        "training_config": training_config,
+                        "n_steps": n_steps,
+                        "n_games": n_games,
+                        "file_number": file_number,
+                        "encoder": encoder,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "scheduler_state_dict": scheduler.state_dict(),
+                    }
+                )
 
-                training.save_checkpoint(checkpoint)
-
-model.eval()
-testing_model.check_games(model, encoder)
-model.train()
+        training.save_checkpoint(
+            {
+                "model_config": model_config,
+                "training_config": training_config,
+                "n_steps": n_steps,
+                "n_games": n_games,
+                "file_number": file_number,
+                "encoder": encoder,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+            }
+        )
+        testing_model.eval_legal_moves_and_log(model, encoder, writer, n_games)
+        model.eval()
+        testing_model.check_games(model, encoder)
+        model.train()

@@ -6,8 +6,8 @@ import chess
 # import re
 
 
-model_name = "bob"
-number = "3561008"
+model_name = "sarah"
+number = None
 model, encoder, checkpoint = utils.load_model(model_name, number=number)
 
 

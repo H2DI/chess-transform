@@ -11,7 +11,7 @@ with open("private_token.json") as f:
 
 headers = {"Authorization": f"Bearer {token}"}
 
-model_name = "bob"
+model_name = "sarah"
 
 model, encoder, checkpoint = utils.load_model(model_name)
 
