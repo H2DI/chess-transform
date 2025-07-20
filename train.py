@@ -1,29 +1,27 @@
 from tqdm import tqdm
-import math
 
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
-import torch.optim as optim
-
-
-from torch.utils.data import DataLoader
-from torch.nn.utils.rnn import pad_sequence
-
 
 import chess_seq.models as models
+import chess_seq.training as training
 import chess_seq.datasets as datasets
 import chess_seq.testing_model as testing_model
 import utils
 import os
 
-model_name = "bob"
+model_name = "sarah"
 
-N_VOCAB = 71
+CHANGE_CONFIG = False
+
+# Default behavior is not use the following parameters, unless CHANGE_CONFIG is True
 BATCH_SIZE = 16
+LR = 1e-4 * BATCH_SIZE / 16
+LR_MIN = 1e-6
 NUM_EPOCHS = 3
-LR = 1e-4
-
+WARMUP = 1000
+FINAL_LR_TIME = 100000
 
 # if torch.backends.mps.is_available():
 #     device = torch.device("mps")
@@ -36,57 +34,55 @@ csv_folder = "/Users/hadiji/Documents/GitHub/chess-transform/data/train_csvs/"
 csv_files = [csv_folder + f for f in os.listdir(csv_folder) if f.endswith(".csv")]
 
 
-#### Load model
+#### Load model and training configs
 
 checkpoint_path = utils.get_latest_checkpoint(model_name)
 
-state_dict = torch.load(checkpoint_path, map_location=device, weights_only=False)
-model_config = state_dict["model_config"]
+checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+model_config = checkpoint["model_config"]
+training_config = checkpoint["training_config"]
+
+if CHANGE_CONFIG:
+    training_config.lr = LR
+    training_config.lr_min = LR_MIN
+    training_config.batch_size = BATCH_SIZE
+    training_config.warmup = WARMUP
+    training_config.final_lr_time = FINAL_LR_TIME
+
 
 model = models.ChessNet(config=model_config).to(device)
-optimizer = optim.Adam(model.parameters(), lr=LR)
-criterion = nn.CrossEntropyLoss(ignore_index=N_VOCAB)
 
-# warmup then cosing annealing
-scheduler = torch.optim.lr_scheduler.SequentialLR(
-    optimizer,
-    schedulers=[
-        torch.optim.lr_scheduler.LinearLR(
-            optimizer, start_factor=0.1, end_factor=1.0, total_iters=1000
-        ),
-        torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=99_000, eta_min=0.01 * LR
-        ),
-    ],
-    milestones=[1000],
-)
+optimizer, scheduler = training.initialize_optimizer(training_config, model)
 
-n_steps = state_dict["n_steps"]
-n_games = state_dict["n_games"]
-encoder = state_dict["encoder"]
+n_steps = checkpoint["n_steps"]
+n_games = checkpoint["n_games"]
+encoder = checkpoint["encoder"]
 
-model.load_state_dict(state_dict["model_state_dict"])
-optimizer.load_state_dict(state_dict["optimizer_state_dict"])
-scheduler.load_state_dict(state_dict["scheduler_state_dict"])
+model.load_state_dict(checkpoint["model_state_dict"])
+optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
 
+n_vocab = model_config.vocab_size
+criterion = nn.CrossEntropyLoss(ignore_index=n_vocab)
 writer = SummaryWriter(log_dir=f"runs/chess_transformer_experiment/{model_config.name}")
 
 
-for csv_train in csv_files:
+for file_number, csv_train in enumerate(csv_files):
+    if file_number <= checkpoint["file_number"]:
+        print(f"Skipping {csv_train} as it is already processed.")
+        continue
+
     print(f"File : {csv_train}")
     # Load data
-    dataset = datasets.ChessDataset(csv_train, device=device)
 
-    def collate_fn(batch_list):
-        inputs_padded = pad_sequence(
-            batch_list, batch_first=True, padding_value=N_VOCAB
-        )
-        return inputs_padded
-
-    dataloader = DataLoader(
-        dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, pin_memory=False
+    dataloader = datasets.build_dataloader(
+        csv_train,
+        batch_size=training_config.batch_size,
+        device=device,
+        padding_value=n_vocab,
     )
+
     with open(csv_train, "r") as f:
         num_lines = sum(1 for _ in f)
     print(f"Number of games in training CSV: {num_lines}")
@@ -96,23 +92,12 @@ for csv_train in csv_files:
         print("Start training")
         for i, seq in tqdm(enumerate(dataloader)):
             n_steps += 1
-            n_games += BATCH_SIZE
-            seq = seq.to(device)
+            n_games += training_config.batch_size
 
-            input_seq = seq[:, :-1]
-            target = seq[:, 1:]
-
-            b, T = seq.shape
-
-            tgt_mask = torch.tril(torch.ones(T - 1, T - 1)).to(device).bool()
-            logits = model(input_seq, mask=tgt_mask)
-            loss = criterion(logits.view(-1, logits.size(-1)), target.reshape(-1))
+            loss, logits = training.train_step(seq, model, criterion, device)
 
             with torch.no_grad():
                 writer.add_scalar("Loss/train", loss.item(), n_steps)
-                writer.add_scalar(
-                    "Loss/train-log", torch.log(loss).item(), math.log(n_steps)
-                )
                 writer.add_scalar("LR", scheduler.get_last_lr()[0], n_steps)
 
             optimizer.zero_grad()
@@ -122,43 +107,36 @@ for csv_train in csv_files:
             optimizer.step()
             scheduler.step()
             if i % 100 == 0:
-                grad_norm = 0.0
-                for p in model.parameters():
-                    if p.grad is not None:
-                        grad_norm += p.grad.data.norm(2).item() ** 2
-                grad_norm = grad_norm**0.5
-                writer.add_scalar("GradNorm/train", grad_norm, n_steps)
-                with torch.no_grad():
-                    weight_norm = 0.0
-                    for param in model.parameters():
-                        weight_norm += param.data.norm(2).item() ** 2
-                    weight_norm = weight_norm**0.5
-                    writer.add_scalar("WeightNorm/train", weight_norm, n_steps)
+                training.log_grads(writer, model, n_steps)
+                training.log_weight_norms(writer, model, n_steps)
 
             if i % 250 == 0:
                 model.eval()
                 testing_model.check_games(model, encoder)
 
                 n_bad, t_first_bad = testing_model.test_first_moves(model, encoder)
-                utils.log_stat_group(writer, "Play/NumberOfBadMoves", n_bad, n_games)
-                utils.log_stat_group(writer, "Play/FirstBadMoves", t_first_bad, n_games)
+                training.log_stat_group(writer, "Play/NumberOfBadMoves", n_bad, n_games)
+                training.log_stat_group(
+                    writer, "Play/FirstBadMoves", t_first_bad, n_games
+                )
 
                 model.train()
 
             if i % 1000 == 0:
                 checkpoint = {
                     "model_config": model_config,
+                    "training_config": training_config,
                     "n_steps": n_steps,
                     "n_games": n_games,
+                    "file_number": file_number,
                     "encoder": encoder,
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scheduler_state_dict": scheduler.state_dict(),
                 }
 
-                utils.save_checkpoint(checkpoint)
+                training.save_checkpoint(checkpoint)
 
-print("Training complete")
 model.eval()
 testing_model.check_games(model, encoder)
 model.train()

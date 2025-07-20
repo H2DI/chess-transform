@@ -29,18 +29,15 @@ def get_latest_checkpoint(model_name):
     return checkpoint_path
 
 
-def save_checkpoint(checkpoint):
-    name = checkpoint["model_config"].name
-    n_games = checkpoint["n_games"]
-    torch.save(checkpoint, f"checkpoints/{name}/checkpoint_{n_games}.pth")
-
-
-def load_model(model_name):
+def load_model(model_name, number=None):
     """
     Loads model for inference.
     Return model, encoder, checkpoint
     """
-    checkpoint_path = get_latest_checkpoint(model_name)
+    if number is None:
+        checkpoint_path = get_latest_checkpoint(model_name)
+    else:
+        checkpoint_path = f"checkpoints/{model_name}/checkpoint_{number}.pth"
     checkpoint = torch.load(
         checkpoint_path, map_location=torch.device("cpu"), weights_only=False
     )
@@ -53,15 +50,3 @@ def load_model(model_name):
 
     encoder = checkpoint["encoder"]
     return model, encoder, checkpoint
-
-
-def log_stat_group(writer, name, values, step):
-    writer.add_scalars(
-        name,
-        {
-            "min": min(values),
-            "max": max(values),
-            "avg": sum(values) / len(values),
-        },
-        step,
-    )

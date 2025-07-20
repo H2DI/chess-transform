@@ -7,7 +7,8 @@ import chess
 
 
 model_name = "bob"
-model, encoder, checkpoint = utils.load_model(model_name)
+number = "3561008"
+model, encoder, checkpoint = utils.load_model(model_name, number=number)
 
 
 game = chess.Board()
@@ -54,7 +55,7 @@ print(
     if bad_plies
     else "0 bad moves"
 )
-print(pgn)
+# print(pgn)
 print(pgn.mainline_moves())
 
 n_bad, t_first_bad = test_first_moves(model, encoder, prints=True)
