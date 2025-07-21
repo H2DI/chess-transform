@@ -46,7 +46,6 @@ def load_model(model_name, number=None):
     model = models.ChessNet(model_config)
 
     model.load_state_dict(checkpoint["model_state_dict"])
-    model.eval()
 
     encoder = checkpoint["encoder"]
     return model, encoder, checkpoint

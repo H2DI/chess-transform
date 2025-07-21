@@ -1,4 +1,4 @@
-from chess_seq.testing_model import play_valid_game, test_first_moves
+from chess_seq.evaluation.testing_model import play_valid_game, test_first_moves
 import utils
 import chess
 

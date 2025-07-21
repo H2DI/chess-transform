@@ -1,3 +1,5 @@
+import utils
+import os
 from tqdm import tqdm
 
 import torch
@@ -8,18 +10,21 @@ import chess_seq.models as models
 import chess_seq.training.trainer as trainer
 import chess_seq.data.datasets as datasets
 import chess_seq.evaluation.testing_model as testing_model
-import utils
-import os
 
-model_name = "sarah"
-NUM_EPOCHS = 3
+model_name = "vasyl_k128_n4_h4"
+DATA_FOLDER = "gms_csvs/"
+
+# csv_folder = "train_csvs/"
+
+NUM_EPOCHS = 10
 TEST_INTERVAL = 250
 CHECKPOINT_INTERVAL = 1000
 
+TEST_GAMES_LENGTHS = [30]
 
 CHANGE_CONFIG = False
 
-# Default behavior is not use the following parameters, unless CHANGE_CONFIG is True
+# Default behavior is to not use the following parameters, unless CHANGE_CONFIG is True
 BATCH_SIZE = 16
 LR = 1e-4 * BATCH_SIZE / 16
 LR_MIN = 1e-6
@@ -33,7 +38,7 @@ device = torch.device("cpu")
 
 #### Data
 
-csv_folder = "/Users/hadiji/Documents/GitHub/chess-transform/data/train_csvs/"
+csv_folder = "/Users/hadiji/Documents/GitHub/chess-transform/data/" + DATA_FOLDER
 csv_files = [csv_folder + f for f in os.listdir(csv_folder) if f.endswith(".csv")]
 
 
@@ -43,7 +48,6 @@ checkpoint_path = utils.get_latest_checkpoint(model_name)
 
 
 checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-_, _, checkpoint = utils.load_model(model_name, number=1246800)
 model_config = checkpoint["model_config"]
 training_config = checkpoint["training_config"]
 
@@ -74,7 +78,7 @@ writer = SummaryWriter(log_dir=f"runs/chess_transformer_experiment/{model_config
 
 
 for file_number, csv_train in enumerate(csv_files):
-    if file_number <= checkpoint["file_number"]:
+    if file_number + 1 < checkpoint["file_number"]:
         print(f"Skipping {csv_train} as it is already processed.")
         continue
 
@@ -116,36 +120,36 @@ for file_number, csv_train in enumerate(csv_files):
                 trainer.log_weight_norms(writer, model, n_steps)
 
             if i % TEST_INTERVAL == 0:
-                testing_model.eval_legal_moves_and_log(model, encoder, writer, n_games)
+                testing_model.eval_legal_moves_and_log(
+                    model, encoder, writer, n_games, TEST_GAMES_LENGTHS
+                )
                 model.train()
 
-            if i % CHECKPOINT_INTERVAL == 0:
+            if i % CHECKPOINT_INTERVAL == 0 and i > 0:
                 trainer.save_checkpoint(
-                    {
-                        "model_config": model_config,
-                        "training_config": training_config,
-                        "n_steps": n_steps,
-                        "n_games": n_games,
-                        "file_number": file_number,
-                        "encoder": encoder,
-                        "model_state_dict": model.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "scheduler_state_dict": scheduler.state_dict(),
-                    }
+                    model_config,
+                    training_config,
+                    n_steps,
+                    n_games,
+                    file_number,
+                    encoder,
+                    model,
+                    optimizer,
+                    scheduler,
                 )
 
         trainer.save_checkpoint(
-            {
-                "model_config": model_config,
-                "training_config": training_config,
-                "n_steps": n_steps,
-                "n_games": n_games,
-                "file_number": file_number,
-                "encoder": encoder,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "scheduler_state_dict": scheduler.state_dict(),
-            }
+            model_config,
+            training_config,
+            n_steps,
+            n_games,
+            file_number,
+            encoder,
+            model,
+            optimizer,
+            scheduler,
         )
-        testing_model.eval_legal_moves_and_log(model, encoder, writer, n_games)
+        testing_model.eval_legal_moves_and_log(
+            model, encoder, writer, n_games, TEST_GAMES_LENGTHS
+        )
         model.train()

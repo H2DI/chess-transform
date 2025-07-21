@@ -11,7 +11,7 @@ parser.add_argument("--pgn_in", type=str, default="")
 parser.add_argument("--csv_out", type=str, default="")
 args = parser.parse_args()
 
-input_folder = args[0]
-output_folder = args[1]
+input_folder = args.pgn_in
+output_folder = args.csv_out
 
 preprocessing.run_through_folder(input_folder, output_folder, encoder)

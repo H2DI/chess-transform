@@ -2,8 +2,7 @@ import csv
 import chess.pgn
 import os
 
-import chess_seq.data.chess_utils as chess_utils
-import argparse
+import chess_seq.chess.chess_utils as chess_utils
 
 
 def process_pgn_file(input_file, output_file, encoder, end_id=None, start_id=0):
@@ -19,7 +18,7 @@ def process_pgn_file(input_file, output_file, encoder, end_id=None, start_id=0):
             if game is None:
                 break
 
-            encoded_moves = chess_utils.parse_pgn_game(game, encoder)
+            encoded_moves = chess_utils.pgn_to_sequence(game, encoder)
             csv_writer.writerow(
                 [game_id, " ".join([str(move) for move in encoded_moves])]
             )
@@ -34,6 +33,4 @@ def run_through_folder(input_folder, output_folder, encoder):
             output_path = os.path.join(
                 output_folder, input_file.replace(".pgn", ".csv")
             )
-            chess_utils.process_pgn_file(
-                input_path, output_path, end_id=None, encoder=encoder
-            )
+            process_pgn_file(input_path, output_path, end_id=None, encoder=encoder)

@@ -1,18 +1,6 @@
-from dataclasses import dataclass
 import torch
+import os
 import torch.optim as optim
-
-
-@dataclass
-class TrainingConfig:
-    lr: float = 1e-4
-    lr_min: float = 1e-6
-    batch_size: int = 16
-    warmup: float = 1000
-    final_lr_time: float = 100000
-
-    optimizer: str = "adam"
-    scheduler: str = "warmup_cosine"
 
 
 def initialize_optimizer(training_config, model):
@@ -55,9 +43,31 @@ def train_step(seq, model, criterion, device):
     return loss, logits
 
 
-def save_checkpoint(checkpoint):
+def save_checkpoint(
+    model_config,
+    training_config,
+    n_steps,
+    n_games,
+    file_number,
+    encoder,
+    model,
+    optimizer,
+    scheduler,
+):
+    checkpoint = {
+        "model_config": model_config,
+        "training_config": training_config,
+        "n_steps": n_steps,
+        "n_games": n_games,
+        "file_number": file_number,
+        "encoder": encoder,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "scheduler_state_dict": scheduler.state_dict(),
+    }
+
     name = checkpoint["model_config"].name
-    n_games = checkpoint["n_games"]
+    os.makedirs(f"checkpoints/{name}", exist_ok=True)
     torch.save(checkpoint, f"checkpoints/{name}/checkpoint_{n_games}.pth")
 
 
