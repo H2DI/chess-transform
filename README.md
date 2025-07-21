@@ -6,7 +6,7 @@ From scratch pytorch implementation of Transformer models to predict sequences o
 Current version is pure imitation learning (next-token prediction), with no notion of reward for 
 good/valid moves.
 
-Data: [Lichess Elite]{https://database.nikonoel.fr/} database. 
+Data: [Lichess Elite](https://database.nikonoel.fr/) database. 
 
 Moves are encoded as sequences of three tokens [from, to, promotion]. 
 
