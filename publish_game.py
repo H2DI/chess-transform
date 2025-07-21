@@ -25,9 +25,23 @@ print(
     if bad_plies
     else "0 bad moves"
 )
-print(pgn.mainline_moves())
+# print(pgn.mainline_moves())
 
 study_id = "ZB0upGxH"
+study_id = "jGATtknM"
+
+# Using requests
+res = requests.get(f"https://lichess.org/api/study/{study_id}.pgn", headers=headers)
+pgn_text = res.text
+
+# Count chapters by number of "[Event " tags
+num_chapters = pgn_text.count("[Event ")
+
+print(f"https://lichess.org/study/{study_id}")
+if num_chapters == 64:
+    Exception("Study is full with 64 chapters.")
+else:
+    print(f"Study can have {64 - num_chapters} more chapters, adding a new one.")
 
 res = requests.post(
     f"https://lichess.org/api/study/{study_id}/import-pgn",
@@ -38,3 +52,6 @@ res = requests.post(
         "orientation": "white",
     },
 )
+
+if res.status_code == 200:
+    print("Game successfully published to the study.")

@@ -141,7 +141,7 @@ def play_from_tokens(tokens, game, node, encoder):
 
 
 @torch.no_grad()
-def check_games(model, encoder):
+def print_basic_games(model, encoder):
     game_tokens = finish_game(model, encoder, n_plies=44)
     print("\n")
     print(encoder.inverse_transform(game_tokens))
@@ -195,8 +195,14 @@ def test_first_moves(model, encoder, n_plies=30, prints=False):
 
 def eval_legal_moves_and_log(model, encoder, writer, n_games):
     model.eval()
-    check_games(model, encoder)
+    print_basic_games(model, encoder)
 
-    n_bad, t_first_bad = test_first_moves(model, encoder)
+    n_plies = 30
+    n_bad, t_first_bad = test_first_moves(model, encoder, n_plies=30)
     log_stat_group(writer, "Play/NumberOfBadMoves", n_bad, n_games)
     log_stat_group(writer, "Play/FirstBadMoves", t_first_bad, n_games)
+
+    n_plies = 200
+    n_bad, t_first_bad = test_first_moves(model, encoder, n_plies=n_plies)
+    log_stat_group(writer, f"Play{n_plies}/NumberOfBadMoves", n_bad, n_games)
+    log_stat_group(writer, f"Play{n_plies}/FirstBadMoves", t_first_bad, n_games)

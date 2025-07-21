@@ -3,15 +3,14 @@ import pickle
 from torch.utils.tensorboard import SummaryWriter
 
 import chess_seq.models as models
-import chess_seq.testing_model as testing_model
-import chess_seq.training as training
-import utils
+import chess_seq.evaluation.testing_model as testing_model
+import chess_seq.training.trainer as trainer
 
 with open("data/move_encoder.pkl", "rb") as f:
     encoder = pickle.load(f)
 
-model_name = "sarah"
-model_config = models.ModelConfig(name=model_name, n_layers=4, n_head=4, k=128)
+model_name = "stan"
+model_config = models.ModelConfig(name=model_name, n_layers=2, n_head=4, k=128)
 # Default values
 # name = "Default"
 # vocab_size = 71
@@ -30,7 +29,7 @@ batch_size = 16
 warmup = 1000
 final_lr_time = 100000
 
-training_config = training.TrainingConfig(
+training_config = trainer.TrainingConfig(
     lr=lr,
     lr_min=lr_min,
     warmup=warmup,
@@ -41,7 +40,7 @@ training_config = training.TrainingConfig(
 
 model = models.ChessNet(config=model_config)
 
-optimizer, scheduler = training.initialize_optimizer(training_config, model)
+optimizer, scheduler = trainer.initialize_optimizer(training_config, model)
 
 writer = SummaryWriter(log_dir=f"runs/{model_config.name}")
 
@@ -58,8 +57,8 @@ checkpoint = {
 }
 
 
-training.save_checkpoint(checkpoint)
+trainer.save_checkpoint(checkpoint)
 
 model.eval()
-testing_model.check_games(model, encoder)
+testing_model.print_basic_games(model, encoder)
 model.train()

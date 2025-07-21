@@ -1,8 +1,6 @@
 import chess
 import chess.pgn
 
-import csv
-
 
 def parse_move(move):
     """Convert a chess.Move object to a list of three tokens"""
@@ -42,23 +40,3 @@ def parse_pgn_game(pgn_game, encoder):
         board.push(move)
     moves_list.append("END")
     return encoder.transform(moves_list)
-
-
-def process_pgn_file(input_file, output_file, encoder, end_id=None, start_id=0):
-    with open(input_file, "r") as pgn, open(output_file, "w", newline="") as out:
-        csv_writer = csv.writer(out)
-        csv_writer.writerow(["game_id", "moves"])
-
-        game_id = start_id
-        while True:
-            if end_id is not None and game_id >= end_id:
-                break
-            game = chess.pgn.read_game(pgn)
-            if game is None:
-                break
-
-            encoded_moves = parse_pgn_game(game, encoder)
-            csv_writer.writerow(
-                [game_id, " ".join([str(move) for move in encoded_moves])]
-            )
-            game_id += 1

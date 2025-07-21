@@ -5,16 +5,19 @@ import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
 import chess_seq.models as models
-import chess_seq.training as training
-import chess_seq.datasets as datasets
-import chess_seq.testing_model as testing_model
+import chess_seq.training.trainer as trainer
+import chess_seq.data.datasets as datasets
+import chess_seq.evaluation.testing_model as testing_model
 import utils
 import os
 
 model_name = "sarah"
+NUM_EPOCHS = 3
+TEST_INTERVAL = 250
+CHECKPOINT_INTERVAL = 1000
+
 
 CHANGE_CONFIG = False
-NUM_EPOCHS = 3
 
 # Default behavior is not use the following parameters, unless CHANGE_CONFIG is True
 BATCH_SIZE = 16
@@ -38,7 +41,9 @@ csv_files = [csv_folder + f for f in os.listdir(csv_folder) if f.endswith(".csv"
 
 checkpoint_path = utils.get_latest_checkpoint(model_name)
 
+
 checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+_, _, checkpoint = utils.load_model(model_name, number=1246800)
 model_config = checkpoint["model_config"]
 training_config = checkpoint["training_config"]
 
@@ -52,7 +57,7 @@ if CHANGE_CONFIG:
 
 model = models.ChessNet(config=model_config).to(device)
 
-optimizer, scheduler = training.initialize_optimizer(training_config, model)
+optimizer, scheduler = trainer.initialize_optimizer(training_config, model)
 
 n_steps = checkpoint["n_steps"]
 n_games = checkpoint["n_games"]
@@ -94,7 +99,7 @@ for file_number, csv_train in enumerate(csv_files):
             n_steps += 1
             n_games += training_config.batch_size
 
-            loss, logits = training.train_step(seq, model, criterion, device)
+            loss, logits = trainer.train_step(seq, model, criterion, device)
 
             with torch.no_grad():
                 writer.add_scalar("Loss/train", loss.item(), n_steps)
@@ -107,15 +112,15 @@ for file_number, csv_train in enumerate(csv_files):
             optimizer.step()
             scheduler.step()
             if i % 100 == 0:
-                training.log_grads(writer, model, n_steps)
-                training.log_weight_norms(writer, model, n_steps)
+                trainer.log_grads(writer, model, n_steps)
+                trainer.log_weight_norms(writer, model, n_steps)
 
-            if i % 250 == 0:
+            if i % TEST_INTERVAL == 0:
                 testing_model.eval_legal_moves_and_log(model, encoder, writer, n_games)
                 model.train()
 
-            if i % 1000 == 0:
-                training.save_checkpoint(
+            if i % CHECKPOINT_INTERVAL == 0:
+                trainer.save_checkpoint(
                     {
                         "model_config": model_config,
                         "training_config": training_config,
@@ -129,7 +134,7 @@ for file_number, csv_train in enumerate(csv_files):
                     }
                 )
 
-        training.save_checkpoint(
+        trainer.save_checkpoint(
             {
                 "model_config": model_config,
                 "training_config": training_config,
@@ -143,6 +148,4 @@ for file_number, csv_train in enumerate(csv_files):
             }
         )
         testing_model.eval_legal_moves_and_log(model, encoder, writer, n_games)
-        model.eval()
-        testing_model.check_games(model, encoder)
         model.train()
