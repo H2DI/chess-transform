@@ -1,4 +1,4 @@
-from chess_seq.evaluation.testing_model import play_valid_game
+from chess_seq.evaluation.game_engine import ChessGameEngine
 import chess_seq.utils as utils
 import chess
 
@@ -9,7 +9,7 @@ import requests
 with open("private_token.json") as f:
     token = json.load(f)["lichessApiToken"]
 
-MODEL_NAME = "vasyl_k64_n4_h4"
+MODEL_NAME = "vasyl_k128_n4_h4"
 study_id = "ZB0upGx"
 study_id = "jGATtknM"
 
@@ -17,7 +17,9 @@ model, encoder, checkpoint = utils.load_model(MODEL_NAME)
 n_games = checkpoint["n_games"]
 
 game = chess.Board()
-game, pgn, bad_plies = play_valid_game(model, encoder, game=game, n_plies=200)
+engine = ChessGameEngine(model, encoder)
+
+game, pgn, bad_plies = engine.play_game(game=game, n_plies=200)
 print(
     f"{len(bad_plies)} bad moves. First bad ply: {bad_plies[0]}"
     if bad_plies
