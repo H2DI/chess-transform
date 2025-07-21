@@ -1,4 +1,3 @@
-import utils
 import os
 from tqdm import tqdm
 
@@ -7,16 +6,17 @@ import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
 import chess_seq.models as models
+import chess_seq.utils as utils
 import chess_seq.training.trainer as trainer
 import chess_seq.data.datasets as datasets
 import chess_seq.evaluation.testing_model as testing_model
 
 model_name = "vasyl_k128_n4_h4"
-DATA_FOLDER = "gms_csvs/"
+DATA_FOLDER = "synthetic_games/"
 
 # csv_folder = "train_csvs/"
 
-NUM_EPOCHS = 10
+NUM_EPOCHS = 30
 TEST_INTERVAL = 250
 CHECKPOINT_INTERVAL = 1000
 
@@ -45,7 +45,6 @@ csv_files = [csv_folder + f for f in os.listdir(csv_folder) if f.endswith(".csv"
 #### Load model and training configs
 
 checkpoint_path = utils.get_latest_checkpoint(model_name)
-
 
 checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
 model_config = checkpoint["model_config"]

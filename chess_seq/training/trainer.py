@@ -69,6 +69,7 @@ def save_checkpoint(
     name = checkpoint["model_config"].name
     os.makedirs(f"checkpoints/{name}", exist_ok=True)
     torch.save(checkpoint, f"checkpoints/{name}/checkpoint_{n_games}.pth")
+    print(f"Saved at checkpoint_{n_games}.pth")
 
 
 def log_grads(writer, model, step):

@@ -115,7 +115,11 @@ class ChessGameEngine:
         candidate_sequence,
         record_pgn,
     ):
-        game, node, legal, true_move_played = self.play_from_tokens(
+        """
+        Updates the game, pgn, node *and* the puts the tokens of the random move
+        actually played in the sequence
+        """
+        game, node, legal, true_move_played = self._play_from_tokens(
             tokens, game, node, record_pgn
         )
 
@@ -133,7 +137,13 @@ class ChessGameEngine:
         return game, node, bad_plies, sequence
 
     @torch.no_grad()
-    def play_from_tokens(self, tokens, game, node, record_pgn):
+    def _play_from_tokens(self, tokens, game, node, record_pgn):
+        """
+        Takes the three tokens and:
+        - plays the move if it is valid
+        - plays a random move otherwise
+        Returns also a boolean saying if the move was legal
+        """
         full_move = self.encoder.inverse_transform(
             tokens
         )  # list of 3 strings (from, to, promo)

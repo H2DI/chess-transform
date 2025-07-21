@@ -8,7 +8,7 @@ import chess_seq.chess.chess_utils as chess_utils
 def process_pgn_file(input_file, output_file, encoder, end_id=None, start_id=0):
     with open(input_file, "r") as pgn, open(output_file, "w", newline="") as out:
         csv_writer = csv.writer(out)
-        csv_writer.writerow(["game_id", "moves"])
+        csv_writer.writerow(["game_id", "tokens"])
 
         game_id = start_id
         while True:

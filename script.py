@@ -1,5 +1,5 @@
 from chess_seq.evaluation.testing_model import play_valid_game, test_first_moves
-import utils
+import chess_seq.utils as utils
 import chess
 
 # import os
