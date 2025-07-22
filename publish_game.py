@@ -9,47 +9,54 @@ import requests
 with open("private_token.json") as f:
     token = json.load(f)["lichessApiToken"]
 
-MODEL_NAME = "vasyl_k128_n4_h4"
+MODEL_NAME = "robo_chuk"
 study_id = "ZB0upGx"
 study_id = "jGATtknM"
+study_id = "LdUHTfjo"  # ada_chuk
 
-model, encoder, checkpoint = utils.load_model(MODEL_NAME)
-n_games = checkpoint["n_games"]
 
-game = chess.Board()
-engine = ChessGameEngine(model, encoder)
+def publish_game(model_name, study_id):
+    model, encoder, checkpoint = utils.load_model(model_name)
+    n_games = checkpoint["n_games"]
 
-game, pgn, bad_plies = engine.play_game(game=game, n_plies=200)
-print(
-    f"{len(bad_plies)} bad moves. First bad ply: {bad_plies[0]}"
-    if bad_plies
-    else "0 bad moves"
-)
-# print(pgn.mainline_moves())
+    game = chess.Board()
+    engine = ChessGameEngine(model, encoder)
 
-# Using requests
-headers = {"Authorization": f"Bearer {token}"}
-res = requests.get(f"https://lichess.org/api/study/{study_id}.pgn", headers=headers)
-pgn_text = res.text
+    game, pgn, bad_plies = engine.play_game(game=game, n_plies=200)
+    print(
+        f"{len(bad_plies)} bad moves. First bad ply: {bad_plies[0]}"
+        if bad_plies
+        else "0 bad moves"
+    )
+    # print(pgn.mainline_moves())
 
-# Count chapters by number of "[Event " tags
-num_chapters = pgn_text.count("[Event ")
+    # Using requests
+    headers = {"Authorization": f"Bearer {token}"}
+    res = requests.get(f"https://lichess.org/api/study/{study_id}.pgn", headers=headers)
+    pgn_text = res.text
 
-print(f"https://lichess.org/study/{study_id}")
-if num_chapters == 64:
-    Exception("Study is full with 64 chapters.")
-else:
-    print(f"Study can have {64 - num_chapters} more chapters, adding a new one.")
+    # Count chapters by number of "[Event " tags
+    num_chapters = pgn_text.count("[Event ")
 
-res = requests.post(
-    f"https://lichess.org/api/study/{study_id}/import-pgn",
-    headers=headers,
-    data={
-        "name": f"{MODEL_NAME}_{str(n_games)}",
-        "pgn": pgn,
-        "orientation": "white",
-    },
-)
+    print(f"https://lichess.org/study/{study_id}")
+    if num_chapters == 64:
+        Exception("Study is full with 64 chapters.")
+    else:
+        print(f"Study can have {64 - num_chapters} more chapters, adding a new one.")
 
-if res.status_code == 200:
-    print("Game successfully published to the study.")
+    res = requests.post(
+        f"https://lichess.org/api/study/{study_id}/import-pgn",
+        headers=headers,
+        data={
+            "name": f"{MODEL_NAME}_{str(n_games)}",
+            "pgn": pgn,
+            "orientation": "white",
+        },
+    )
+
+    if res.status_code == 200:
+        print("Game successfully published to the study.")
+
+
+if __name__ == "__main__":
+    publish_game(MODEL_NAME, study_id)

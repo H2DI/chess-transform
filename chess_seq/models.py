@@ -31,39 +31,27 @@ class SelfAttention(nn.Module):
         self.unifyheads = nn.Linear(k, k)
 
     def forward(self, x, mask=None):
-        b, t, k = x.shape
-
         h = self.heads
+        k = self.k
         s = k // h
 
-        keys = self.tokeys(x)
-        queries = self.toqueries(x)
-        values = self.tovalues(x)
+        b, N, _ = x.shape
+        K = self.tokeys(x).view((b, N, h, s)).permute(0, 2, 1, 3)  # b, h, N, dk
+        Q = self.toqueries(x).view((b, N, h, s)).permute(0, 2, 1, 3)  # b, h, N, dk
 
-        keys = keys.view(b, t, h, s).transpose(1, 2)
-        queries = queries.view(b, t, h, s).transpose(1, 2)
-        values = values.view(b, t, h, s).transpose(1, 2)
-
-        keys = keys.contiguous().view(b * h, t, s)
-        queries = queries.contiguous().view(b * h, t, s)
-        values = values.contiguous().view(b * h, t, s)
-
-        raw_weights = torch.bmm(queries, keys.transpose(-1, -2)) / math.sqrt(s)
-
+        raw_weights = Q @ K.transpose(-1, -2) / math.sqrt(s)  # b, h, N, N
         if mask is not None:
-            raw_weights = raw_weights.view(b, h, t, t)
             mask = mask.unsqueeze(0).unsqueeze(0)
             raw_weights = raw_weights.masked_fill(mask == 0, float("-inf")).view(
-                b * h, t, t
+                b * h, N, N
             )
+        attention_weights = torch.softmax(raw_weights, dim=-1)
 
-        weights = F.softmax(raw_weights, dim=-1)
-        ys = torch.bmm(weights, values)
+        V = self.tovalues(x).view(b, N, h, s).permute(0, 2, 1, 3)  # b, h, N, s
+        heads_output = (attention_weights @ V).permute(0, 2, 1, 3)  # b, N, h, s
+        heads_output.view(b, N, k)
 
-        ys = ys.view(b, h, t, s).transpose(1, 2)
-        ys = ys.contiguous().view(b, t, k)
-
-        return self.unifyheads(ys)
+        return self.unifyheads(heads_output)
 
 
 class PositionalEncoding(nn.Module):

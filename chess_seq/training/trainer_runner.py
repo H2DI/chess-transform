@@ -88,80 +88,79 @@ class ChessTrainerRunner:
         )
         self.save_checkpoint()
 
-    def train(self):
+    def train(self, skip_seen_files=True):
         csv_folder = self.config.data_folder
         csv_files = [
             csv_folder + f for f in os.listdir(csv_folder) if f.endswith(".csv")
         ]
         for file_id, csv_train in enumerate(csv_files):
-            if file_id + 1 < self.training_state["file_number"]:
+            if file_id + 1 < self.training_state["file_number"] and skip_seen_files:
                 print(f"Skipping {csv_train} as it is already processed.")
                 continue
 
             self.file_number += 1
-
             print(f"File : {csv_train}")
+            self._train_on_file(csv_train)
 
-            dataloader = datasets.build_dataloader(
-                csv_train,
-                batch_size=self.training_config.batch_size,
-                device=self.device,
-                padding_value=self.model_config.vocab_size,
-            )
+    def _train_on_file(self, csv_train):
+        dataloader = datasets.build_dataloader(
+            csv_train,
+            batch_size=self.training_config.batch_size,
+            device=self.device,
+            padding_value=self.model_config.vocab_size,
+        )
 
-            with open(csv_train, "r") as f:
-                num_lines = sum(1 for _ in f)
-            print(f"Number of games in training CSV: {num_lines}")
+        with open(csv_train, "r") as f:
+            num_lines = sum(1 for _ in f)
+        print(f"Number of games in training CSV: {num_lines}")
 
-            for epoch in range(self.config.num_epochs):
-                self.model.train()
-                print("Start training")
-                for i, seq in tqdm(enumerate(dataloader)):
-                    self.n_steps += 1
-                    self.n_games += self.training_config.batch_size
+        for epoch in range(self.config.num_epochs):
+            self.model.train()
+            print("Start training")
+            for i, seq in tqdm(enumerate(dataloader)):
+                self.n_steps += 1
+                self.n_games += self.training_config.batch_size
 
-                    loss, logits = self._train_step(seq)
+                loss, logits = self._train_step(seq)
 
-                    with torch.no_grad():
-                        self.writer.add_scalar("Loss/train", loss.item(), self.n_steps)
-                        self.writer.add_scalar(
-                            "LR", self.scheduler.get_last_lr()[0], self.n_steps
-                        )
-
-                    self.optimizer.zero_grad()
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(
-                        self.model.parameters(), max_norm=1.0
+                with torch.no_grad():
+                    self.writer.add_scalar("Loss/train", loss.item(), self.n_steps)
+                    self.writer.add_scalar(
+                        "LR", self.scheduler.get_last_lr()[0], self.n_steps
                     )
 
-                    self.optimizer.step()
-                    self.scheduler.step()
-                    if i % 100 == 0:
-                        trainer.log_grads(self.writer, self.model, self.n_steps)
-                        trainer.log_weight_norms(self.writer, self.model, self.n_steps)
+                self.optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
 
-                    if i % self.config.test_interval == 0:
-                        testing_model.eval_legal_moves_and_log(
-                            self.model,
-                            self.encoder,
-                            self.writer,
-                            self.n_games,
-                            self.config.test_games_lengths,
-                        )
-                        self.model.train()
+                self.optimizer.step()
+                self.scheduler.step()
+                if i % 100 == 0:
+                    trainer.log_grads(self.writer, self.model, self.n_steps)
+                    trainer.log_weight_norms(self.writer, self.model, self.n_steps)
 
-                    if i % self.config.checkpoint_interval == 0 and i > 0:
-                        self.save_checkpoint()
+                if i % self.config.test_interval == 0:
+                    testing_model.eval_legal_moves_and_log(
+                        self.model,
+                        self.encoder,
+                        self.writer,
+                        self.n_games,
+                        self.config.test_games_lengths,
+                    )
+                    self.model.train()
 
-                self.save_checkpoint()
-                testing_model.eval_legal_moves_and_log(
-                    self.model,
-                    self.encoder,
-                    self.writer,
-                    self.n_games,
-                    self.config.test_games_lengths,
-                )
-                self.model.train()
+                if i % self.config.checkpoint_interval == 0 and i > 0:
+                    self.save_checkpoint()
+
+            self.save_checkpoint()
+            testing_model.eval_legal_moves_and_log(
+                self.model,
+                self.encoder,
+                self.writer,
+                self.n_games,
+                self.config.test_games_lengths,
+            )
+            self.model.train()
 
     def _train_step(self, seq):
         seq = seq.to(self.device)
