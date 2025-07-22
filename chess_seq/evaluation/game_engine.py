@@ -3,7 +3,7 @@ import torch
 import random
 import chess
 
-from chess_seq.chess.chess_utils import (
+from chess_seq.chess_utils.chess_utils import (
     move_to_tokens,
     board_to_sequence,
     board_to_pgn,

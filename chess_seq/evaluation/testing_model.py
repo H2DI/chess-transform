@@ -1,5 +1,4 @@
 import torch
-
 import chess
 
 from chess_seq.training.trainer import log_stat_group

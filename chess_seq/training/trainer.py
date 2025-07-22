@@ -1,12 +1,12 @@
 import torch
-import os
 import torch.optim as optim
+
+from chess_seq.training.training_config_classes import TrainingConfig
+
+globals()["TrainingConfig"] = TrainingConfig
 
 
 def initialize_optimizer(training_config, model):
-    """
-    Adam, with warmup and cosine.
-    """
     optimizer = optim.Adam(model.parameters(), lr=training_config.lr)
 
     scheduler = torch.optim.lr_scheduler.SequentialLR(
@@ -27,49 +27,6 @@ def initialize_optimizer(training_config, model):
         milestones=[training_config.warmup],
     )
     return optimizer, scheduler
-
-
-def train_step(seq, model, criterion, device):
-    seq = seq.to(device)
-
-    input_seq = seq[:, :-1]
-    target = seq[:, 1:]
-
-    b, T = seq.shape
-
-    tgt_mask = torch.tril(torch.ones(T - 1, T - 1)).to(device).bool()
-    logits = model(input_seq, mask=tgt_mask)
-    loss = criterion(logits.view(-1, logits.size(-1)), target.reshape(-1))
-    return loss, logits
-
-
-def save_checkpoint(
-    model_config,
-    training_config,
-    n_steps,
-    n_games,
-    file_number,
-    encoder,
-    model,
-    optimizer,
-    scheduler,
-):
-    checkpoint = {
-        "model_config": model_config,
-        "training_config": training_config,
-        "n_steps": n_steps,
-        "n_games": n_games,
-        "file_number": file_number,
-        "encoder": encoder,
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "scheduler_state_dict": scheduler.state_dict(),
-    }
-
-    name = checkpoint["model_config"].name
-    os.makedirs(f"checkpoints/{name}", exist_ok=True)
-    torch.save(checkpoint, f"checkpoints/{name}/checkpoint_{n_games}.pth")
-    print(f"Saved at checkpoint_{n_games}.pth")
 
 
 def log_grads(writer, model, step):

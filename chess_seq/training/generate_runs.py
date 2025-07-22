@@ -1,4 +1,4 @@
-from chess_seq.chess.chess_utils import board_to_sequence
+from chess_seq.chess_utils.chess_utils import board_to_sequence
 from chess_seq.evaluation.game_engine import ChessGameEngine
 
 import csv

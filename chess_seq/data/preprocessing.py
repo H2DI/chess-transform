@@ -2,7 +2,7 @@ import csv
 import chess.pgn
 import os
 
-import chess_seq.chess.chess_utils as chess_utils
+import chess_seq.chess_utils.chess_utils as chess_utils
 
 
 def process_pgn_file(input_file, output_file, encoder, end_id=None, start_id=0):

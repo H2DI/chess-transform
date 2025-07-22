@@ -3,7 +3,7 @@ from chess_seq.training.generate_runs import generate_runs
 
 
 OUTPUT_DIR = "synthetic_games"
-NEW_GAMES = 3000
+NEW_GAMES = 4096
 N_PLIES = 100
 
 MODEL_NAME = "vasyl_k128_n4_h4"
