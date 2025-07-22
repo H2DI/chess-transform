@@ -10,5 +10,5 @@ Data: [Lichess Elite](https://database.nikonoel.fr/) database.
 
 Moves are encoded as sequences of three tokens [from, to, promotion]. 
 
-Some sample games played [here](https://lichess.org/study/ZB0upGxH). 
+Some sample games played [here](https://lichess.org/study/ZB0upGxH). Still looking to play valid moves.
 
