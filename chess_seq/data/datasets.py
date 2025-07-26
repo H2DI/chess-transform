@@ -31,11 +31,14 @@ class ChessDataset(IterableDataset):
                 yield self.parse_line(line)
 
 
-def build_dataloader(csv_train, batch_size=16, device=None, padding_value=-1):
+def build_dataloader(
+    csv_train, batch_size=16, device=None, padding_value=-1, max_length=1200
+):
     """Build a DataLoader for the ChessDataset."""
     dataset = ChessDataset(csv_train, device=device)
 
     def collate_fn(batch_list):
+        batch_list = [seq[:max_length] for seq in batch_list]
         inputs_padded = pad_sequence(
             batch_list, batch_first=True, padding_value=padding_value
         )
