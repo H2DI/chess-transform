@@ -1,5 +1,6 @@
 import json
 import requests
+import torch
 
 from chess_seq.evaluation.game_engine import ChessGameEngine
 import chess_seq.utils as utils
@@ -21,6 +22,7 @@ study_id = "LdUHTfjo"  # ada_chuk
 
 def publish_game(model_name, study_id):
     model, encoder, checkpoint = utils.load_model(model_name)
+    model.to(torch.device("cpu"))
     n_games = checkpoint["n_games"]
 
     game = chess.Board()
