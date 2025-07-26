@@ -36,6 +36,7 @@ class ChessTrainerRunner:
 
         self.n_steps = self.training_state["n_steps"]
         self.n_games = self.training_state["n_games"]
+        self.epoch = self.training_state["epoch"]
         self.file_number = self.training_state["file_number"]
 
         self.criterion = torch.nn.CrossEntropyLoss(
