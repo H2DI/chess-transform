@@ -102,6 +102,8 @@ class ChessTrainerRunner:
 
                 self.file_number += 1
                 print(f"File : {csv_train}")
+                torch.cuda.empty_cache()
+                torch.cuda.reset_peak_memory_stats()
                 self._train_on_file(csv_train)
             self.file_number = 0
             self.epoch += 1
