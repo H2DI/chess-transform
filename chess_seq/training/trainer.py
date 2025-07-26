@@ -1,9 +1,9 @@
 import torch
 import torch.optim as optim
 
-from chess_seq.training.training_config_classes import TrainingConfig
+# from chess_seq.training.training_config_classes import TrainingConfig
 
-globals()["TrainingConfig"] = TrainingConfig
+# globals()["TrainingConfig"] = TrainingConfig
 
 
 def initialize_optimizer(training_config, model):

@@ -43,11 +43,12 @@ class ChessGameEngine:
         return sequence.squeeze(0).cpu().numpy()
 
     @torch.no_grad()
-    def play_game(self, game=None, n_plies=30, record_pgn=True):
+    def play_game(self, game=None, n_plies=30, record_pgn=True, greedy=True):
         """
         Plays a chess game. A random move is chosen if the model's output is not a valid
         move.
         """
+        self.model.eval()
 
         device = self.device
         encoder = self.encoder
@@ -73,7 +74,9 @@ class ChessGameEngine:
         bad_plies = []
 
         for _ in range(n_plies):
-            tokens, candidate_sequence, ended = self._generate_next_tokens(sequence)
+            tokens, candidate_sequence, ended = self._generate_next_tokens(
+                sequence, greedy=greedy
+            )
             if ended:
                 break
             current_ply += 1
@@ -92,12 +95,16 @@ class ChessGameEngine:
                 break
         return game, pgn_game, bad_plies
 
-    def _generate_next_tokens(self, sequence):
+    def _generate_next_tokens(self, sequence, greedy=True):
         tokens = []
         candidate_sequence = sequence.clone()
         for _ in range(3):
             out = self.model(candidate_sequence)  # B, T, vocab_size
-            next_token = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
+            if greedy:
+                next_token = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
+            else:
+                dist = torch.distributions.Categorical(logits=out[0, -1])
+                next_token = dist.sample().unsqueeze(0).unsqueeze(0)
             tokens.append(next_token.item())
             candidate_sequence = torch.cat((candidate_sequence, next_token), dim=1)
             if candidate_sequence[0, -1].cpu().numpy() == self.end_token:

@@ -1,15 +1,19 @@
+import json
+import requests
+
 from chess_seq.evaluation.game_engine import ChessGameEngine
 import chess_seq.utils as utils
 import chess
 
-import json
+import configs
 
-import requests
 
 with open("private_token.json") as f:
     token = json.load(f)["lichessApiToken"]
 
-MODEL_NAME = "robo_chuk"
+config = configs.TrainingSession()
+model_name = config.model_name
+
 study_id = "ZB0upGx"
 study_id = "jGATtknM"
 study_id = "LdUHTfjo"  # ada_chuk
@@ -22,7 +26,7 @@ def publish_game(model_name, study_id):
     game = chess.Board()
     engine = ChessGameEngine(model, encoder)
 
-    game, pgn, bad_plies = engine.play_game(game=game, n_plies=200)
+    game, pgn, bad_plies = engine.play_game(game=game, n_plies=200, greedy=False)
     print(
         f"{len(bad_plies)} bad moves. First bad ply: {bad_plies[0]}"
         if bad_plies
@@ -48,7 +52,7 @@ def publish_game(model_name, study_id):
         f"https://lichess.org/api/study/{study_id}/import-pgn",
         headers=headers,
         data={
-            "name": f"{MODEL_NAME}_{str(n_games)}",
+            "name": f"{model_name}_{str(n_games)}",
             "pgn": pgn,
             "orientation": "white",
         },
@@ -59,4 +63,8 @@ def publish_game(model_name, study_id):
 
 
 if __name__ == "__main__":
-    publish_game(MODEL_NAME, study_id)
+    model, encoder, checkpoint = utils.load_model(model_name)
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"Number of parameters in the model: {num_params}")
+
+    publish_game(model_name, study_id)

@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-import torch.nn.functional as F
 import math
 
 from dataclasses import dataclass
@@ -11,9 +10,9 @@ from dataclasses import dataclass
 class ModelConfig:
     name: str = "Default"
     vocab_size: int = 71
-    block_size: int = 2048
+    block_size: int = 512
     n_head: int = 4
-    n_layers: int = 2
+    n_layers: int = 4
     dropout: int = 0.1
     k: int = 64  # k needs to be divisible by n_head
 
@@ -30,59 +29,72 @@ class SelfAttention(nn.Module):
 
         self.unifyheads = nn.Linear(k, k)
 
-    def forward(self, x, mask=None):
+    def forward(self, x, rope, mask=None):
         h = self.heads
         k = self.k
         s = k // h
 
         b, N, _ = x.shape
-        K = self.tokeys(x).view((b, N, h, s)).permute(0, 2, 1, 3)  # b, h, N, dk
-        Q = self.toqueries(x).view((b, N, h, s)).permute(0, 2, 1, 3)  # b, h, N, dk
+
+        K = rope(self.tokeys(x).view((b, N, h, s)).permute(0, 2, 1, 3))  # b, h, N, dk
+        Q = rope(self.toqueries(x).view((b, N, h, s)).permute(0, 2, 1, 3))
 
         raw_weights = Q @ K.transpose(-1, -2) / math.sqrt(s)  # b, h, N, N
         if mask is not None:
             mask = mask.unsqueeze(0).unsqueeze(0)
             raw_weights = raw_weights.masked_fill(mask == 0, float("-inf")).view(
-                b * h, N, N
+                b, h, N, N
             )
         attention_weights = torch.softmax(raw_weights, dim=-1)
 
         V = self.tovalues(x).view(b, N, h, s).permute(0, 2, 1, 3)  # b, h, N, s
         heads_output = (attention_weights @ V).permute(0, 2, 1, 3)  # b, N, h, s
-        heads_output.view(b, N, k)
 
-        return self.unifyheads(heads_output)
+        return self.unifyheads(heads_output.reshape(b, N, k))
 
 
-class PositionalEncoding(nn.Module):
+class RoPE(nn.Module):
     def __init__(self, d_model, block_size):
-        """
-        Inputs
-            d_model - Hidden dimensionality of the input.
-            block_size - Maximum length of a sequence to expect.
-        """
         super().__init__()
+        assert d_model % 2 == 0
 
-        pe = torch.zeros(block_size, d_model)
-        position = torch.arange(0, block_size, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
-        )
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
+        self.d_model = d_model
+        self.block_size = block_size
 
-        # Modulo 3 and 6 encoding
-        pe[:, : d_model // 4] += torch.sin(2 * math.pi * position / 3)
-        pe[:, d_model // 4 : d_model // 2] += torch.cos(2 * math.pi * position / 6)
+        half_dim = d_model // 2
+        inv_freq = 1.0 / (
+            10000 ** (torch.arange(0, half_dim, dtype=torch.float32) / half_dim)
+        ).unsqueeze(0)  # 1, k // 2
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
 
-        # persistent=False tells PyTorch to not add the buffer to the state dict
-        # (e.g. when we save the model)
-        pe = pe.unsqueeze(0)
-        self.register_buffer("pe", pe, persistent=False)
+        angles = self._get_angles(block_size)  # block_size, k //2
+
+        self.register_buffer("cos", torch.cos(angles), persistent=False)
+        self.register_buffer("sin", torch.sin(angles), persistent=False)
 
     def forward(self, x):
-        x = x + self.pe[:, : x.size(1)]
-        return x
+        b, h, N, k = x.shape
+        x_reshaped = x.view(b, h, N, k // 2, 2)
+        x1 = x_reshaped[..., 0]
+        x2 = x_reshaped[..., 1]
+        if N <= self.block_size:
+            cos = self.cos[:N].unsqueeze(0).unsqueeze(0)
+            sin = self.sin[:N].unsqueeze(0).unsqueeze(0)
+        else:
+            cos, sin = self._recompute_cossin(N, x.device)
+
+        rotated = torch.stack([x1 * cos + x2 * sin, -x1 * sin + x2 * cos], dim=-1)
+        return rotated.reshape(b, h, N, k)
+
+    def _get_angles(self, N, device=None):
+        positions = torch.arange(N, dtype=torch.float32, device=device).unsqueeze(
+            1
+        )  # N_max, 1
+        return positions @ self.inv_freq  # N_max, k //2
+
+    def _recompute_cossin(self, N, device=None):
+        angles = self._get_angles(N, device)
+        return torch.cos(angles), torch.sin(angles)
 
 
 class TransformerBlock(nn.Module):
@@ -98,10 +110,10 @@ class TransformerBlock(nn.Module):
 
         self.ff = nn.Sequential(nn.Linear(k, 4 * k), nn.GELU(), nn.Linear(4 * k, k))
 
-    def forward(self, x, mask=None):
+    def forward(self, x, rope, mask=None):
         # pre-norm
         x = self.norm1(x)
-        attended = self.attention(x, mask=mask)
+        attended = self.attention(x, rope, mask=mask)
         x = x + self.dropout(attended)
         x = self.norm2(x)
         fedforward = self.ff(x)
@@ -119,7 +131,7 @@ class ChessNet(nn.Module):
         self.embedder = nn.Embedding(
             config.vocab_size + 1, config.k, padding_idx=config.vocab_size
         )
-        self.pe = PositionalEncoding(config.k, config.block_size)
+        self.rope = RoPE(config.k // config.n_head, config.block_size)
         self.blocks = nn.ModuleList(
             [
                 TransformerBlock(config.k, config.n_head, dropout=config.dropout)
@@ -131,8 +143,7 @@ class ChessNet(nn.Module):
     def forward(self, x, mask=None):
         # x:  b, T
         r = self.embedder(x)  # (b, T, k)
-        r = self.pe(r)  # (b, T, k)
         for block in self.blocks:
-            r = block(r, mask=mask)  #  (b, T, k)
+            r = block(r, self.rope, mask=mask)  #  (b, T, k)
         r = self.l4(r)  #  (b, T, k)
         return r

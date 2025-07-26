@@ -18,7 +18,9 @@ class ChessTrainerRunner:
         self, session_config: TrainingSession, model_config=None, training_config=None
     ):
         self.config = session_config
-        self.device = torch.device("cpu")  # Change to "mps" or "cuda" if available
+        self.device = torch.device(
+            self.config.device_str
+        )  # Change to "mps" or "cuda" if available
         self.model_name = session_config.model_name
 
         if session_config.new_model:
