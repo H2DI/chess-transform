@@ -48,7 +48,6 @@ class ChessGameEngine:
         Plays a chess game. A random move is chosen if the model's output is not a valid
         move.
         """
-        self.model.eval()
 
         device = self.device
         encoder = self.encoder

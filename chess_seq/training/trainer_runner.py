@@ -18,9 +18,7 @@ class ChessTrainerRunner:
         self, session_config: TrainingSession, model_config=None, training_config=None
     ):
         self.config = session_config
-        self.device = torch.device(
-            self.config.device_str
-        )  # Change to "mps" or "cuda" if available
+        self.device = torch.device(self.config.device_str)
         self.model_name = session_config.model_name
 
         if session_config.new_model:
@@ -83,7 +81,7 @@ class ChessTrainerRunner:
         self.training_config = training_config
         with open("data/move_encoder.pkl", "rb") as f:
             self.encoder = pickle.load(f)
-        self.n_steps, self.n_games, self.file_number = 0, 0, 0
+        self.n_steps, self.n_games, self.epoch, self.file_number = 0, 0, 0, 0
         self.model = models.ChessNet(config=model_config).to(self.device)
         self.optimizer, self.scheduler = trainer.initialize_optimizer(
             training_config, self.model
@@ -95,14 +93,17 @@ class ChessTrainerRunner:
         csv_files = [
             csv_folder + f for f in os.listdir(csv_folder) if f.endswith(".csv")
         ]
-        for file_id, csv_train in enumerate(csv_files):
-            if file_id + 1 < self.training_state["file_number"] and skip_seen_files:
-                print(f"Skipping {csv_train} as it is already processed.")
-                continue
+        for epoch in range(self.config.num_epochs - self.epoch):
+            for file_id, csv_train in enumerate(csv_files):
+                if file_id + 1 < self.training_state["file_number"] and skip_seen_files:
+                    print(f"Skipping {csv_train} as it is already processed.")
+                    continue
 
-            self.file_number += 1
-            print(f"File : {csv_train}")
-            self._train_on_file(csv_train)
+                self.file_number += 1
+                print(f"File : {csv_train}")
+                self._train_on_file(csv_train)
+            self.file_number = 0
+            self.epoch += 1
 
     def _train_on_file(self, csv_train):
         dataloader = datasets.build_dataloader(
@@ -116,53 +117,52 @@ class ChessTrainerRunner:
             num_lines = sum(1 for _ in f)
         print(f"Number of games in training CSV: {num_lines}")
 
-        for epoch in range(self.config.num_epochs):
-            self.model.train()
-            print("Start training")
-            for i, seq in tqdm(enumerate(dataloader)):
-                self.n_steps += 1
-                self.n_games += self.training_config.batch_size
+        self.model.train()
+        print("Start training")
+        for i, seq in tqdm(enumerate(dataloader)):
+            self.n_steps += 1
+            self.n_games += self.training_config.batch_size
 
-                loss, logits = self._train_step(seq)
+            loss, logits = self._train_step(seq)
 
-                with torch.no_grad():
-                    self.writer.add_scalar("Loss/train", loss.item(), self.n_steps)
-                    self.writer.add_scalar(
-                        "LR", self.scheduler.get_last_lr()[0], self.n_steps
-                    )
+            with torch.no_grad():
+                self.writer.add_scalar("Loss/train", loss.item(), self.n_steps)
+                self.writer.add_scalar(
+                    "LR", self.scheduler.get_last_lr()[0], self.n_steps
+                )
 
-                self.optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+            self.optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
 
-                self.optimizer.step()
-                self.scheduler.step()
-                if i % 100 == 0:
-                    trainer.log_grads(self.writer, self.model, self.n_steps)
-                    trainer.log_weight_norms(self.writer, self.model, self.n_steps)
+            self.optimizer.step()
+            self.scheduler.step()
+            if i % 100 == 0:
+                trainer.log_grads(self.writer, self.model, self.n_steps)
+                trainer.log_weight_norms(self.writer, self.model, self.n_steps)
 
-                if i % self.config.test_interval == 0:
-                    testing_model.eval_legal_moves_and_log(
-                        self.model,
-                        self.encoder,
-                        self.writer,
-                        self.n_games,
-                        self.config.test_games_lengths,
-                    )
-                    self.model.train()
+            if i % self.config.test_interval == 0:
+                testing_model.eval_legal_moves_and_log(
+                    self.model,
+                    self.encoder,
+                    self.writer,
+                    self.n_games,
+                    self.config.test_games_lengths,
+                )
+                self.model.train()
 
-                if i % self.config.checkpoint_interval == 0 and i > 0:
-                    self.save_checkpoint()
+            if i % self.config.checkpoint_interval == 0 and i > 0:
+                self.save_checkpoint()
 
-            self.save_checkpoint()
-            testing_model.eval_legal_moves_and_log(
-                self.model,
-                self.encoder,
-                self.writer,
-                self.n_games,
-                self.config.test_games_lengths,
-            )
-            self.model.train()
+        self.save_checkpoint()
+        testing_model.eval_legal_moves_and_log(
+            self.model,
+            self.encoder,
+            self.writer,
+            self.n_games,
+            self.config.test_games_lengths,
+        )
+        self.model.train()
 
     def _train_step(self, seq):
         seq = seq.to(self.device)
@@ -183,6 +183,7 @@ class ChessTrainerRunner:
             "training_config": self.training_config,
             "n_steps": self.n_steps,
             "n_games": self.n_games,
+            "epoch": self.epoch,
             "file_number": self.file_number,
             "encoder": self.encoder,
             "model_state_dict": self.model.state_dict(),
