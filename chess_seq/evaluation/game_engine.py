@@ -94,7 +94,7 @@ class ChessGameEngine:
                 break
         return game, pgn_game, bad_plies
 
-    def _generate_next_tokens(self, sequence, greedy=True):
+    def _generate_next_tokens(self, sequence, greedy=True, no_end=True):
         tokens = []
         candidate_sequence = sequence.clone()
         for _ in range(3):
@@ -102,7 +102,10 @@ class ChessGameEngine:
             if greedy:
                 next_token = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
             else:
-                dist = torch.distributions.Categorical(logits=out[0, -1])
+                logits = out[0, -1]
+                if no_end:
+                    logits[0] = float("-inf")
+                dist = torch.distributions.Categorical(logits=logits)
                 next_token = dist.sample().unsqueeze(0).unsqueeze(0)
             tokens.append(next_token.item())
             candidate_sequence = torch.cat((candidate_sequence, next_token), dim=1)
