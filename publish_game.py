@@ -12,8 +12,8 @@ import configs
 with open("private_token.json") as f:
     token = json.load(f)["lichessApiToken"]
 
-config = configs.TrainingSession()
-model_name = config.model_name
+config = configs.ModelConfig()
+model_name = config.name
 
 study_id = "ZB0upGx"
 study_id = "jGATtknM"
@@ -29,11 +29,15 @@ def publish_game(model_name, study_id):
     engine = ChessGameEngine(model, encoder)
 
     game, pgn, bad_plies = engine.play_game(game=game, n_plies=200, greedy=False)
-    print(
-        f"{len(bad_plies)} bad moves. First bad ply: {bad_plies[0]}"
+    num_plies = len(game.move_stack)
+
+    comment = (
+        f"{len(bad_plies)} bad moves out of {num_plies}. First bad ply: {bad_plies[0]}"
         if bad_plies
         else "0 bad moves"
     )
+    pgn.comment = comment
+    print(comment)
     # print(pgn.mainline_moves())
 
     # Using requests

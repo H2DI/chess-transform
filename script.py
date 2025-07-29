@@ -1,61 +1,40 @@
-from chess_seq.evaluation.testing_model import play_valid_game, test_first_moves
-import chess_seq.utils as utils
 import chess
+import pandas as pd
+import numpy as np
 
-# import os
+import os
 # import re
 
+### convert to npz
+# file_path = "data/train_csvs/lichess_elite_2014-10.csv"
 
-model_name = "sarah"
-number = None
-model, encoder, checkpoint = utils.load_model(model_name, number=number)
+# game = chess.Board()
+# df = pd.read_csv(file_path, header=None, skiprows=1)
+# df = df.iloc[:, 1:]  # drop first column
 
+# print(df)
 
-game = chess.Board()
-# game.push(chess.Move.from_uci("g1f3"))
+# print(df.values.shape)
 
-# e4
-# game.push(chess.Move.from_uci("e2e4"))
-
-# d4
-# game.push(chess.Move.from_uci("d2d4"))
-
-# c4
-# game.push(chess.Move.from_uci("c2c4"))
-
-# a4
-# game.push(chess.Move.from_uci("a2a4"))
-
-# f3
-# game.push(chess.Move.from_uci("f2f3"))
-
-# Nh3
-# game.push(chess.Move.from_uci("g1h3"))
-
-# French
-# game.push(chess.Move.from_uci("e2e4"))
-# game.push(chess.Move.from_uci("e7e6"))
-
-# Sicilian
-# game.push(chess.Move.from_uci("e2e4"))
-# game.push(chess.Move.from_uci("c7c5"))
-
-# e4 e5
-# game.push(chess.Move.from_uci("e2e4"))
-# game.push(chess.Move.from_uci("e7e5"))
-
-# d4 d5
-# game.push(chess.Move.from_uci("d2d4"))
-# game.push(chess.Move.from_uci("d7d5"))
+# # np.savez("data/train_npz/lichess_elite_2013-09.npz", data=df.values)
 
 
-game, pgn, bad_plies = play_valid_game(model, encoder, game=game, n_plies=150)
-print(
-    f"{len(bad_plies)} bad moves. First bad ply: {bad_plies[0]}"
-    if bad_plies
-    else "0 bad moves"
-)
-# print(pgn)
-print(pgn.mainline_moves())
+# loaded = np.load("data/train_npz/lichess_elite_2013-09.npz", allow_pickle=True)
+# data = loaded["data"]
+# print(data.shape)
 
-n_bad, t_first_bad = test_first_moves(model, encoder, prints=True)
+total_lines = 0
+
+folder_path = "data/train_csvs"
+for filename in os.listdir(folder_path):
+    file_path = os.path.join(folder_path, filename)
+    if filename.lower() == ".ds_store":
+        continue
+    if os.path.isfile(file_path):
+        print(f"Processing file: {file_path}")
+    with open(file_path, "r") as f:
+        num_lines = sum(1 for _ in f)
+    total_lines += num_lines
+    # print(f"Number of games in training CSV: {num_lines}")
+
+print(total_lines)

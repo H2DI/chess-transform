@@ -65,6 +65,8 @@ class RoPE(nn.Module):
         inv_freq = 1.0 / (
             10000 ** (torch.arange(0, half_dim, dtype=torch.float32) / half_dim)
         ).unsqueeze(0)  # 1, k // 2
+        inv_freq[0, -1] = 2 * math.pi / 3
+        inv_freq[0, -2] = 2 * math.pi / 6
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
         angles = self._get_angles(block_size)  # block_size, k //2
@@ -89,8 +91,8 @@ class RoPE(nn.Module):
     def _get_angles(self, N, device=None):
         positions = torch.arange(N, dtype=torch.float32, device=device).unsqueeze(
             1
-        )  # N_max, 1
-        return positions @ self.inv_freq  # N_max, k //2
+        )  # N, 1
+        return positions @ self.inv_freq  # N, k //2
 
     def _recompute_cossin(self, N, device=None):
         angles = self._get_angles(N, device)

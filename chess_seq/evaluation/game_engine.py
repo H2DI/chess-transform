@@ -109,7 +109,10 @@ class ChessGameEngine:
                 next_token = dist.sample().unsqueeze(0).unsqueeze(0)
             tokens.append(next_token.item())
             candidate_sequence = torch.cat((candidate_sequence, next_token), dim=1)
-            if candidate_sequence[0, -1].cpu().numpy() == self.end_token:
+            if (
+                not (no_end)
+                and candidate_sequence[0, -1].cpu().numpy() == self.end_token
+            ):
                 return tokens, candidate_sequence, True
         return tokens, candidate_sequence, False
 
