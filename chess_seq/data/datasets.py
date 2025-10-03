@@ -4,6 +4,8 @@ from torch.utils.data import IterableDataset
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
+import numpy as np
+
 """
 TODO: 
 sort games by  length
@@ -11,7 +13,7 @@ filter games that end in checkmate
 """
 
 
-class ChessDataset(IterableDataset):
+class ChessCSVDataset(IterableDataset):
     def __init__(self, csv_file, device=None):
         if device is None:
             device = torch.device("cpu")
@@ -31,11 +33,34 @@ class ChessDataset(IterableDataset):
                 yield self.parse_line(line)
 
 
+class ChessNPZDataset(IterableDataset):
+    def __init__(self, npz_file, device=None):
+        if device is None:
+            device = torch.device("cpu")
+        self.device = device
+        self.npz_file = npz_file
+
+    def __iter__(self):
+        with np.load(self.npz_file) as data:
+            for line in data:
+                yield torch.tensor(data[line], device=self.device)
+
+
 def build_dataloader(
-    csv_train, batch_size=16, device=None, padding_value=-1, max_length=1200
+    train_file,
+    batch_size=16,
+    device=None,
+    padding_value=-1,
+    max_length=1200,
+    data_format="npz",
 ):
     """Build a DataLoader for the ChessDataset."""
-    dataset = ChessDataset(csv_train, device=device)
+    if data_format == "npz":
+        dataset = ChessNPZDataset(train_file, device=device)
+    elif data_format == "csv":
+        dataset = ChessCSVDataset(train_file, device=device)
+    else:
+        raise ValueError(f"Unsupported data format: {data_format}")
 
     def collate_fn(batch_list):
         batch_list = [seq[:max_length] for seq in batch_list]

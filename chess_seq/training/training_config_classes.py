@@ -19,11 +19,13 @@ class TrainingSession:
     model_name: str
     data_folder: str
     encoder_path: str
+
     num_epochs: int
     test_interval: int
     checkpoint_interval: int
     test_games_lengths: List[int]
 
+    restart: bool = False
     change_config: bool = False
     batch_size: int = 16
     lr: int = 1e-4 * batch_size / 16

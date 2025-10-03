@@ -57,3 +57,11 @@ def log_stat_group(writer, name, values, step):
         },
         step,
     )
+
+
+def log_average_group(writer, name, values, step):
+    writer.add_scalar(
+        name + "avg",
+        sum(values) / len(values),
+        step,
+    )

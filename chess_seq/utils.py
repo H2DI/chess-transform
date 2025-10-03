@@ -5,12 +5,12 @@ import torch
 import chess_seq.models as models
 
 
-def get_latest_checkpoint(model_name):
+def get_latest_checkpoint(model_name, base_name="checkpoint"):
     model_dir = f"checkpoints/{model_name}/"
-    pattern = re.compile(r"checkpoint_(\d+)\.pth")
+    pattern = re.compile(base_name + r"_(\d+)\.pth")
+
     max_suffix = -1
     max_file = None
-
     for fname in os.listdir(model_dir):
         match = pattern.match(fname)
         if match:
@@ -29,15 +29,27 @@ def get_latest_checkpoint(model_name):
     return checkpoint_path
 
 
-def load_model(model_name, number=None):
+def clone_model(model, requires_grad=False):
+    cloned_model = type(model)(model.config)
+    cloned_model.load_state_dict(model.state_dict())
+    if not (requires_grad):
+        for param in cloned_model.parameters():
+            param.requires_grad = requires_grad
+    return cloned_model
+
+
+def load_model(model_name, number=None, special_name=None):
     """
     Loads model for inference.
     Return model, encoder, checkpoint
     """
-    if number is None:
-        checkpoint_path = get_latest_checkpoint(model_name)
+    if special_name is None:
+        if number is None:
+            checkpoint_path = get_latest_checkpoint(model_name)
+        else:
+            checkpoint_path = f"checkpoints/{model_name}/checkpoint_{number}.pth"
     else:
-        checkpoint_path = f"checkpoints/{model_name}/checkpoint_{number}.pth"
+        checkpoint_path = f"checkpoints/{model_name}/{special_name}.pth"
     checkpoint = torch.load(
         checkpoint_path, map_location=torch.device("cpu"), weights_only=False
     )
@@ -46,6 +58,9 @@ def load_model(model_name, number=None):
     model = models.ChessNet(model_config)
 
     model.load_state_dict(checkpoint["model_state_dict"])
-
     encoder = checkpoint["encoder"]
+
+    print(f"Loaded model from {checkpoint_path}")
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"Number of parameters in model: {num_params}")
     return model, encoder, checkpoint

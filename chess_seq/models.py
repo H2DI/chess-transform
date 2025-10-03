@@ -4,6 +4,7 @@ import torch.nn as nn
 import math
 
 from dataclasses import dataclass
+from typing import List
 
 
 @dataclass
@@ -15,6 +16,9 @@ class ModelConfig:
     n_layers: int = 4
     dropout: int = 0.1
     k: int = 64  # k needs to be divisible by n_head
+
+    special_freqs: List[float] = None
+    encoder_path: str = "data/move_encoder.pkl"
 
 
 class SelfAttention(nn.Module):
@@ -54,9 +58,11 @@ class SelfAttention(nn.Module):
 
 
 class RoPE(nn.Module):
-    def __init__(self, d_model, block_size):
+    def __init__(self, d_model, block_size, special_freqs=None):
         super().__init__()
         assert d_model % 2 == 0
+        if special_freqs is None:
+            special_freqs = [2 * math.pi / 3, 2 * math.pi / 6]
 
         self.d_model = d_model
         self.block_size = block_size
@@ -65,8 +71,10 @@ class RoPE(nn.Module):
         inv_freq = 1.0 / (
             10000 ** (torch.arange(0, half_dim, dtype=torch.float32) / half_dim)
         ).unsqueeze(0)  # 1, k // 2
-        inv_freq[0, -1] = 2 * math.pi / 3
-        inv_freq[0, -2] = 2 * math.pi / 6
+
+        for i, freq in enumerate(special_freqs):
+            inv_freq[0, -i] = 2 * math.pi / 3
+            # inv_freq[0, -2] = 2 * math.pi / 6
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
         angles = self._get_angles(block_size)  # block_size, k //2
@@ -133,7 +141,11 @@ class ChessNet(nn.Module):
         self.embedder = nn.Embedding(
             config.vocab_size + 1, config.k, padding_idx=config.vocab_size
         )
-        self.rope = RoPE(config.k // config.n_head, config.block_size)
+        self.rope = RoPE(
+            config.k // config.n_head,
+            config.block_size,
+            special_freqs=config.special_freqs,
+        )
         self.blocks = nn.ModuleList(
             [
                 TransformerBlock(config.k, config.n_head, dropout=config.dropout)

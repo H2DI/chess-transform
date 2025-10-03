@@ -4,6 +4,7 @@ from tqdm import tqdm
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
+import numpy as np
 
 import chess_seq.models as models
 import chess_seq.utils as utils
@@ -25,7 +26,6 @@ class ChessTrainerRunner:
             self._initialize_new_model(model_config, training_config)
 
         self.training_state = self._load_checkpoint()
-
         self.model_config, self.training_config = self._load_configs()
         self.model = self._setup_model()
         self.optimizer, self.scheduler = self._setup_training()
@@ -34,10 +34,15 @@ class ChessTrainerRunner:
             log_dir=f"runs/chess_transformer_experiment/{self.model_config.name}"
         )
 
+        self.data_format = self.config.data_format
         self.n_steps = self.training_state["n_steps"]
         self.n_games = self.training_state["n_games"]
-        self.epoch = self.training_state["epoch"]
-        self.file_number = self.training_state["file_number"]
+        if self.config.restart:
+            self.epoch = 0
+            self.file_number = 0
+        else:
+            self.epoch = self.training_state["epoch"]
+            self.file_number = self.training_state["file_number"]
 
         self.criterion = torch.nn.CrossEntropyLoss(
             ignore_index=self.model_config.vocab_size
@@ -80,7 +85,7 @@ class ChessTrainerRunner:
         assert model_config.name == self.config.model_name, "Model name mismatch"
         self.model_config = model_config
         self.training_config = training_config
-        with open("data/move_encoder.pkl", "rb") as f:
+        with open(model_config.encoder_path, "rb") as f:
             self.encoder = pickle.load(f)
         self.n_steps, self.n_games, self.epoch, self.file_number = 0, 0, 0, 0
         self.model = models.ChessNet(config=model_config).to(self.device)
@@ -90,33 +95,36 @@ class ChessTrainerRunner:
         self.save_checkpoint()
 
     def train(self, skip_seen_files=True):
-        csv_folder = self.config.data_folder
-        csv_files = [
-            csv_folder + f for f in os.listdir(csv_folder) if f.endswith(".csv")
+        train_folder = self.config.data_folder
+        print(f"{train_folder=}")
+        print(f"{self.data_format=}")
+        train_files = [
+            train_folder + f
+            for f in os.listdir(train_folder)
+            if f.endswith(f".{self.data_format}")
         ]
         for epoch in range(self.config.num_epochs - self.epoch):
-            for file_id, csv_train in enumerate(csv_files):
-                if file_id + 1 < self.training_state["file_number"] and skip_seen_files:
-                    print(f"Skipping {csv_train} as it is already processed.")
+            for file_id, train_file in enumerate(train_files):
+                if file_id + 1 < self.file_number and skip_seen_files:
+                    print(f"Skipping {train_file} as it is already processed.")
                     continue
 
                 self.file_number += 1
-                print(f"File : {csv_train}")
-                self._train_on_file(csv_train)
+                print(f"File : {train_file}")
+                self._train_on_file(train_file)
             self.file_number = 0
             self.epoch += 1
 
-    def _train_on_file(self, csv_train):
+    def _train_on_file(self, train_file):
         dataloader = datasets.build_dataloader(
-            csv_train,
+            train_file,
             batch_size=self.training_config.batch_size,
             device=self.device,
             padding_value=self.model_config.vocab_size,
+            data_format=self.config.data_format,
         )
 
-        with open(csv_train, "r") as f:
-            num_lines = sum(1 for _ in f)
-        print(f"Number of games in training CSV: {num_lines}")
+        self._count_lines(train_file)
 
         self.model.train()
         print("Start training")
@@ -143,19 +151,26 @@ class ChessTrainerRunner:
                 trainer.log_weight_norms(self.writer, self.model, self.n_steps)
 
             if i % self.config.test_interval == 0:
-                testing_model.eval_legal_moves_and_log(
-                    self.model,
-                    self.encoder,
-                    self.writer,
-                    self.n_games,
-                    self.config.test_games_lengths,
-                )
-                self.model.train()
+                self._evaluate_model()
 
             if i % self.config.checkpoint_interval == 0 and i > 0:
                 self.save_checkpoint()
 
         self.save_checkpoint()
+        self._evaluate_model()
+
+    def _count_lines(self, train_file):
+        if self.data_format == "npz":
+            with open(train_file, "rb") as f:
+                data = np.load(f)
+                num_lines = len(data)
+        elif self.data_format == "csv":
+            with open(train_file, "r") as f:
+                num_lines = sum(1 for _ in f)
+        print(f"Number of games in training file: {num_lines}")
+
+    def _evaluate_model(self):
+        self.model.eval()
         testing_model.eval_legal_moves_and_log(
             self.model,
             self.encoder,
