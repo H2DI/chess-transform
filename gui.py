@@ -90,9 +90,9 @@ class TTTGui:
 if __name__ == "__main__":
     # If these lines block or crash, you'll now get a dialog/traceback
     model, encoder, checkpoint = utils.load_model(
-        "ttt_large_573440_GRPO", number="150000"
+        "ttt_large_573440_GRPO", special_name="no_loss"
     )
     player = NNPlayer(model, encoder, mask_illegal=True)
 
-    gui = TTTGui(player, agent_first=False, greedy=True)  # Agent plays first
+    gui = TTTGui(player, agent_first=True, greedy=True)  # Agent plays first
     gui.run()

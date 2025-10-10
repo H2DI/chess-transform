@@ -28,6 +28,17 @@ class TTTBoard:
     def is_game_over(self):
         return self._is_game_over
 
+    def copy(self):
+        new_board = TTTBoard()
+        new_board.X = self.X.copy()
+        new_board.O = self.O.copy()
+        new_board.turn = self.turn
+        new_board.move_stack = self.move_stack.copy()
+        new_board._is_game_over = self._is_game_over
+        new_board.winner = self.winner
+        new_board.legal_moves = self.legal_moves.copy()
+        return new_board
+
     def push(self, x):
         assert not self.is_game_over(), "Game is already over."
         i, j = x[0], x[1]
@@ -74,6 +85,19 @@ class TTTBoard:
                     legal_moves.append((i, j))
         self.legal_moves = legal_moves
         return
+
+    def print_game(self):
+        i = 0
+        current_board = np.zeros((3, 3), dtype=str)
+        for move in self.move_stack:
+            if i % 2 == 0:
+                print(i // 2)
+                current_board[move[0], move[1]] = "X"
+            else:
+                current_board[move[0], move[1]] = "O"
+            i += 1
+            print(current_board)
+        print(f"Winner: {self.winner}")
 
 
 def move_to_tokens(move):

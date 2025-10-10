@@ -10,6 +10,10 @@ from chess_seq.tictactoe.reinforce import REINFORCE
 
 
 class PPO(REINFORCE):
+    """
+    WIP
+    """
+
     def __init__(
         self,
         actor,

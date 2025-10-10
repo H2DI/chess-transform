@@ -12,12 +12,15 @@ Players are used in RL environments.
 
 
 class Player:
+    def __init__(self, epsilon=0):
+        self.epsilon = epsilon
+
     def get_move(self, game, greedy=False):
         pass
 
 
 class RandomPlayer(Player):
-    def get_move(self, game: mechanics.TTTBoard, greedy=False):
+    def get_move(self, game: mechanics.TTTBoard, greedy=None):
         legal_moves = game.legal_moves
         if not legal_moves:
             return None, False
@@ -25,15 +28,58 @@ class RandomPlayer(Player):
 
 
 class SimplePlayer(Player):
-    def get_move(self, game: mechanics.TTTBoard, greedy=False):
+    def get_move(self, game: mechanics.TTTBoard, greedy=None):
         legal_moves = game.legal_moves
         if not legal_moves:
             return None, False
         return legal_moves[0]
 
 
+class ReasonablePlayer(Player):
+    def get_move(self, game: mechanics.TTTBoard, greedy=None):
+        if random.random() < self.epsilon:
+            return random.choice(game.legal_moves)
+
+        legal_moves = game.legal_moves
+
+        if not legal_moves:
+            return None, False
+
+        self.to_play = "X" if (game.turn % 2) == 0 else "O"
+        self.adv = "O" if self.to_play == "X" else "X"
+
+        # Check for winning move
+        for move in legal_moves:
+            temp_game = game.copy()
+            temp_game.push(move)
+            if temp_game.is_game_over() and temp_game.winner == self.to_play:
+                return move
+
+        # Block opponent's winning move
+        for move in legal_moves:
+            temp_game = game.copy()
+            temp_game.turn += 1  # Switch turn to opponent
+            temp_game.push(move)
+            if temp_game.is_game_over() and temp_game.winner == self.adv:
+                return move
+
+        # Otherwise, pick center if available
+        if (1, 1) in legal_moves:
+            return (1, 1)
+
+        # Otherwise, pick a random corner
+        corners = [(0, 0), (0, 2), (2, 0), (2, 2)]
+        available_corners = [c for c in corners if c in legal_moves]
+        if available_corners:
+            return random.choice(available_corners)
+
+        # Otherwise, pick any move
+        return random.choice(legal_moves)
+
+
 class NNPlayer(Player):
     def __init__(self, model, encoder, mask_illegal=True, device=None):
+        super().__init__()
         self.engine = TTTGameEngine(model, encoder, device=device)
         self.engine.model.eval()
         self.mask_illegal = mask_illegal
@@ -57,7 +103,7 @@ class NNPlayer(Player):
         )
         mask = self.build_mask(game)
 
-        tokenid, _ = self.engine.generate_next_tokenid(
+        tokenid, _, entropy = self.engine.generate_next_tokenid(
             sequence, greedy=greedy, mask=mask
         )
         token = self.engine.encoder.inverse_transform(tokenid[0])[0]
@@ -68,7 +114,7 @@ class NNPlayer(Player):
         sequence = mechanics.board_to_sequence(
             game, self.engine.encoder, self.engine.device
         )
-        tokenid, _ = self.engine.generate_next_tokenid(sequence, greedy=True)
+        tokenid, _, _ = self.engine.generate_next_tokenid(sequence, greedy=True)
         token = self.engine.encoder.inverse_transform(tokenid[0])[0]
         return token
 
@@ -83,7 +129,7 @@ class NNPlayer(Player):
             ),
             dim=1,
         )
-        tokenid, _ = self.engine.generate_next_tokenid(
+        tokenid, _, _ = self.engine.generate_next_tokenid(
             sequence, greedy=True, predict_winner=True
         )
         token = self.engine.encoder.inverse_transform(tokenid[0])[0]

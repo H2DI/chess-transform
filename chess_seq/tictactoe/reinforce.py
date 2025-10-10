@@ -32,16 +32,12 @@ class REINFORCE(TTTAgent):
     def reset(self):
         self.scores = []
         self.current_episode = []
-        self.current_episode_tokenids_played = []
 
         self.optimizer = optim.Adam(
             params=self.engine.model.parameters(), lr=self.learning_rate
         )
 
         self.n_eps = 0
-
-    def new_game(self):
-        pass
 
     def update(self, state, action, reward, done, next_state, writer=None):
         """ """
@@ -72,10 +68,8 @@ class REINFORCE(TTTAgent):
             unn_log_probs = self.engine.model(sequence)
             log_probs = torch.log_softmax(unn_log_probs, dim=-1)
 
-            if len(state) % 2 == 0:
-                log_probs = log_probs[:, ::2, :]
-            elif len(state) % 2 == 1:
-                log_probs = log_probs[:, 1::2, :]
+            start_index = 0 if self.agent_id == "X" else 1
+            log_probs = log_probs[:, start_index::2, :]
 
             tokenids = tokenids.transpose(0, 1)
             self.scores.append(
@@ -95,14 +89,10 @@ class REINFORCE(TTTAgent):
                 self.scores = []
 
                 if writer is not None:
-                    total_norm = 0.0
-                    for p in self.engine.model.parameters():
-                        if p.grad is not None:
-                            param_norm = p.grad.data.norm(2)
-                            total_norm += param_norm.item() ** 2
-                    total_norm = total_norm**0.5
+                    total_norm = torch.nn.utils.clip_grad_norm_(
+                        self.engine.model.parameters(), max_norm=1e9
+                    )
                     writer.add_scalar("train/grad_norm", total_norm, self.n_eps)
-                    # print(f"Gradient norm: {total_norm:.4f}")
 
         return
 

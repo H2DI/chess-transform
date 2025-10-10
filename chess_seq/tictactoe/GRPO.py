@@ -5,6 +5,7 @@ import torch
 import torch.optim as optim
 
 from torch.nn.utils.rnn import pad_sequence
+from torch.optim.lr_scheduler import LambdaLR
 
 import chess_seq.tictactoe.mechanics as mechanics
 from chess_seq.tictactoe.agent import TTTAgent
@@ -12,6 +13,23 @@ import chess_seq.utils as utils
 
 
 class GRPO(TTTAgent):
+    """
+    Implement the formula for the score:
+    \[
+        \sum_i \sum_t \min \left(
+            \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)} A_t,
+                \text{clip}\left(
+                        \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)},
+                        1 - \epsilon,
+                        1 + \epsilon
+                    \right)
+                    A_t
+        \right)
+        - \beta KL\left(\pi_\theta\right) ||\pi_{\theta_{old}})
+    \]
+
+    """
+
     def __init__(
         self,
         model,
@@ -23,14 +41,20 @@ class GRPO(TTTAgent):
         group_size,
         n_groups,
         learning_rate,
+        min_lr,
+        end_lr_steps,
+        device=None,
     ):
         self.full_name = base_name + "_GRPO"
-        super().__init__(model, encoder, full_name=self.full_name)
+        super().__init__(model, encoder, full_name=self.full_name, device=device)
         self.engine.model.eval()
         for p in self.engine.model.parameters():
             p.requires_grad_(False)
 
         self.updated_model = utils.clone_model(model, requires_grad=True)
+
+        self.updated_model.to(device)
+        self.engine.model.to(device)
 
         self.beta = beta
         self.epsilon_low = epsilon_low
@@ -40,6 +64,9 @@ class GRPO(TTTAgent):
         self.group_size = group_size
         self.learning_rate = learning_rate
 
+        self.total_steps = end_lr_steps
+        self.min_lr = min_lr
+
         self.reset()
 
     def reset(self):
@@ -47,42 +74,61 @@ class GRPO(TTTAgent):
 
         self.current_log_ratios = []
         self.current_rewards = []
+        self.current_entropies = []
 
         self.optimizer = optim.Adam(
             params=self.updated_model.parameters(), lr=self.learning_rate
+        )
+        self.scheduler = LambdaLR(
+            self.optimizer,
+            lr_lambda=lambda step: max(
+                self.min_lr / self.learning_rate, 1 - step / self.total_steps
+            ),
         )
 
         self.n_eps = 0
 
     def compute_log_probs(self, sequence, tokenids, model):
+        """
+        Example:
+        agent_id = "X"
+        sequence : [ST,  X1,  O1,  X2,  O2 ]
+        logits :   [px1, po1, px2, po2, px3]
+        tokenids : [X1, X2, X3] taken at indices 0, 2, 4
+
+        agent_id = "O"
+        sequence : [ST,  X1,  O1,  X2,  O2,  X3 ]
+        logits :   [px1, po1, px2, po2, px3, po3]
+        tokenids : [O1, O2, O3] taken at indices 1, 3, 5
+
+        """
         unn_log_probs = model(sequence)
         log_probs = torch.log_softmax(unn_log_probs, dim=-1)
 
-        player_id = (sequence.shape[-1] - 1) % 2
-        log_probs = log_probs[:, player_id::2, :]
+        start_index = 0 if self.agent_id == "X" else 1
+        log_probs = log_probs[:, start_index::2, :]
 
         return log_probs.gather(-1, tokenids).squeeze(-1).squeeze(0)
 
-    def optimizer_step(self):
+    def optimizer_step(self, writer=None):
         log_ratios = pad_sequence(
             self.current_log_ratios, batch_first=True, padding_value=0.0
         )  # (G, max_len)
 
-        masking_tensor = [
-            torch.tensor([True] * ep.shape[0], device=self.engine.device)
-            for ep in self.current_log_ratios
-        ]
-        masks = pad_sequence(masking_tensor, batch_first=True, padding_value=False)
-        masks = masks.bool()
+        lengths = [ep.shape[0] for ep in self.current_log_ratios]
+        max_len = max(lengths)
+        masks = torch.zeros(
+            (len(lengths), max_len), dtype=torch.bool, device=self.engine.device
+        )
+        for i, length in enumerate(lengths):
+            masks[i, :length] = True
 
         rewards = torch.cat(self.current_rewards).unsqueeze(1)  # (G, 1)
         if rewards.std() < 1e-8:
             print("Group rewards have zero std, skipping update")
             return 0, 0
-        elif rewards.std() < 1e-3:
-            advantages = rewards - rewards.mean()
         else:
-            advantages = (rewards - rewards.mean()) / (rewards.std())
+            advantages = (rewards - rewards.mean()) / (rewards.std() + 1e-3)
 
         score1 = torch.exp(log_ratios) * advantages  # (G, max_len)
         score2 = (
@@ -93,7 +139,7 @@ class GRPO(TTTAgent):
         )  # (G, max_len)
 
         # Masking flattens
-        unregularized_score = torch.min(score1, score2)[masks].mean()
+        unregularized_score = torch.minimum(score1, score2)[masks].mean()
         KL = (torch.exp(-log_ratios) + log_ratios - 1)[masks].mean()
 
         score = unregularized_score - self.beta * KL
@@ -101,26 +147,57 @@ class GRPO(TTTAgent):
         self.optimizer.zero_grad()
         neg_score = -score
         neg_score.backward()
+        torch.nn.utils.clip_grad_norm_(self.updated_model.parameters(), max_norm=10.0)
         self.optimizer.step()
+        self.scheduler.step()
 
-        return unregularized_score.item(), KL.item()
+        if writer is not None:
+            self.log_training(writer, KL.item(), unregularized_score.item())
+            lr = self.scheduler.get_last_lr()[0]
+            writer.add_scalar("train/learning_rate", lr, self.n_eps)
+
+        return
+
+    def log_training(self, writer, KL_item, unregularized_score_item):
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            self.updated_model.parameters(), max_norm=1e9
+        )
+
+        weights_norm = torch.norm(
+            torch.stack([p.norm(2) for p in self.updated_model.parameters()])
+        ).item()
+        writer.add_scalar("train/weights_norm", weights_norm, self.n_eps)
+        writer.add_scalar("train/grad_norm", grad_norm, self.n_eps)
+        writer.add_scalars(
+            "score",
+            {
+                "unregularized_score": unregularized_score_item,
+                "kl": -self.beta * KL_item,
+            },
+            self.n_eps,
+        )
 
     def update(self, state, action, reward, done, next_state, writer=None):
         self.current_episode.append(self.last_tokenid)
+        self.current_entropies.append(self.last_token_entropy)
 
         if done:
             self.n_eps += 1
 
-            sequence = mechanics.move_stack_to_sequence(
-                state, self.engine.encoder, self.engine.device
+            self.current_rewards.append(
+                torch.tensor([reward], dtype=torch.float32, device=self.engine.device)
             )
 
-            current_episode = np.array(self.current_episode)
             tokenids = torch.tensor(
-                current_episode, dtype=torch.int64, device=self.engine.device
+                np.array(self.current_episode),
+                dtype=torch.int64,
+                device=self.engine.device,
             ).transpose(0, 1)  # (1, L, 1)
 
             self.updated_model.train()
+            sequence = mechanics.move_stack_to_sequence(
+                state, self.engine.encoder, self.engine.device
+            )
             log_probs = self.compute_log_probs(sequence, tokenids, self.updated_model)
             with torch.no_grad():
                 log_probs_old = self.compute_log_probs(
@@ -128,33 +205,19 @@ class GRPO(TTTAgent):
                 )
 
             log_ratio = log_probs - log_probs_old
-
             self.current_log_ratios.append(log_ratio)
-            self.current_rewards.append(
-                torch.tensor([reward], dtype=torch.float32, device=self.engine.device)
-            )
 
             self.current_episode = []
 
             if (self.n_eps % self.group_size) == 0:
-                unregularized_score_item, KL_item = self.optimizer_step()
+                self.optimizer_step(writer=writer)
+                if writer is not None:
+                    writer.add_scalar(
+                        "train/entropies", np.mean(self.current_entropies), self.n_eps
+                    )
                 self.current_log_ratios = []
                 self.current_rewards = []
-
-                if writer is not None:
-                    total_norm = torch.nn.utils.clip_grad_norm_(
-                        self.updated_model.parameters(), max_norm=1e9
-                    )
-
-                    writer.add_scalar("train/grad_norm", total_norm, self.n_eps)
-                    writer.add_scalars(
-                        "score",
-                        {
-                            "unregularized_score": unregularized_score_item,
-                            "kl": -self.beta * KL_item,
-                        },
-                        self.n_eps,
-                    )
+                self.current_entropies = []
 
             if (self.n_eps % (self.group_size * self.n_groups)) == 0:
                 self.engine.model.load_state_dict(self.updated_model.state_dict())

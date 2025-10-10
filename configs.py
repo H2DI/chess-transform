@@ -4,13 +4,13 @@ from typing import List
 
 @dataclass
 class ModelConfig:
-    name: str = "ttt_deep_large"
+    name: str = "ttt_small_zero"
     vocab_size: int = 14
     block_size: int = 12
     n_head: int = 4
-    n_layers: int = 6
+    n_layers: int = 3
     dropout: int = 0.1
-    k: int = 128  # k needs to be divisible by n_head
+    k: int = 32  # k needs to be divisible by n_head
 
     special_freqs: List[float] = field(default_factory=lambda: [2 * 3.14159 / 2])
     encoder_path: str = "data/ttt_encoder.pkl"
@@ -30,8 +30,8 @@ class TrainingConfig:
 
 @dataclass
 class TrainingSession:
-    new_model: bool = False
-    model_name: str = "ttt_deep_large"
+    new_model: bool = True
+    model_name: str = "ttt_small_zero"
     data_folder: str = "synthetic_games/"
 
     data_format: str = "npz"  # or "csv"
@@ -53,5 +53,7 @@ class TrainingSession:
 
 @dataclass
 class RLTraining:
-    model_name: str = "ttt_large"
+    model_name: str = "ttt_small_zero"
     log_dir: str = "logs/rl_training"
+
+    device_str: str = "cpu"

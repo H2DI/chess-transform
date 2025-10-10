@@ -10,6 +10,7 @@ class TTTGameEngine:
         self.model = model
         self.encoder = encoder
         self.device = device if device else next(model.parameters()).device
+        self.model.to(self.device)
 
         self.end_tokenid = encoder.transform(["END"])[0]
         self.special_tokenids = encoder.transform(["START", "END", "X", "O", "T"])
@@ -53,14 +54,16 @@ class TTTGameEngine:
             logits = logits + mask
         if greedy:
             next_tokenid = logits.argmax(dim=-1).unsqueeze(0).unsqueeze(0)
+            entropy = 0
         else:
             if predict_winner:
                 # set logits to zero for all tokens that are not winners
                 pass
             dist = torch.distributions.Categorical(logits=logits)
+            entropy = dist.entropy().item()
             next_tokenid = dist.sample().unsqueeze(0).unsqueeze(0)
         candidate_sequence = torch.cat((candidate_sequence, next_tokenid), dim=1)
-        return next_tokenid.cpu().numpy(), candidate_sequence
+        return next_tokenid.cpu().numpy(), candidate_sequence, entropy
 
 
 class TTTGamePlayer:
@@ -89,7 +92,7 @@ class TTTGamePlayer:
         self.current_ply = len(self.game.move_stack)
 
         for _ in range(n_plies):
-            tokenid, candidate_sequence = self.engine.generate_next_tokenid(
+            tokenid, candidate_sequence, _ = self.engine.generate_next_tokenid(
                 self.sequence, greedy=self.greedy, predict_winner=False
             )
             self.current_ply += 1
@@ -106,7 +109,7 @@ class TTTGamePlayer:
         self._predict_winner()
 
     def _predict_end(self):
-        tokenid, candidate_sequence = self.engine.generate_next_tokenid(
+        tokenid, candidate_sequence, _ = self.engine.generate_next_tokenid(
             self.sequence, greedy=self.greedy, predict_winner=False
         )
         self.current_ply += 1
@@ -129,7 +132,7 @@ class TTTGamePlayer:
     def _predict_winner(self):
         self.current_ply += 1
         winner = self.game.winner
-        tokenid, _ = self.engine.generate_next_tokenid(
+        tokenid, _, _ = self.engine.generate_next_tokenid(
             self.sequence, greedy=self.greedy, predict_winner=True
         )
         if winner == self.engine.encoder.inverse_transform([tokenid])[0]:

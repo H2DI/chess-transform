@@ -9,30 +9,51 @@ from torch import no_grad
 
 
 class TTTAgent:
-    def __init__(self, model, encoder, device=None, full_name="Generic_TTTAgent"):
+    def __init__(
+        self,
+        model,
+        encoder,
+        device=None,
+        full_name="Generic_TTTAgent",
+        self_mask_illegal=True,
+    ):
         self.engine = TTTGameEngine(model, encoder, device=device)
         self.full_name = full_name
         self.last_tokenid = None
+        self.last_token_entropy = None
 
-    def new_game(self):
-        pass
+    def new_game(self, agent_id):
+        self.agent_id = agent_id  # "X" or "O"
+
+    def _build_mask(self, legal_moves):
+        mask = torch.zeros(self.engine.vocab_size, device=self.engine.device)
+        mask = mask + float("-inf")
+        for move in legal_moves:
+            token = mechanics.move_to_tokens(move)
+            tokenid = self.engine.encoder.transform([token])[0]
+            mask[tokenid] = 0.0
+        return mask
 
     @no_grad()
-    def get_action(self, game_moves, greedy=True):
+    def get_action(self, game_moves, greedy=True, legals=None):
         """ """
         self.engine.model.eval()
-        tokenid = self._get_tokenid(game_moves, greedy=greedy)
+        mask = self._build_mask(legals) if legals is not None else None
+        tokenid, entropy = self._get_tokenid(game_moves, greedy=greedy, mask=mask)
+        self.last_token_entropy = entropy
         token = self.engine.encoder.inverse_transform(tokenid[0])[0]
         move = mechanics.tokens_to_move(token, corrected=True)
         return move
 
-    def _get_tokenid(self, game_moves, greedy=True):
+    def _get_tokenid(self, game_moves, greedy=True, mask=None):
         sequence = mechanics.move_stack_to_sequence(
             game_moves, self.engine.encoder, self.engine.device
         )
-        tokenid, _ = self.engine.generate_next_tokenid(sequence, greedy=greedy)
+        tokenid, _, entropy = self.engine.generate_next_tokenid(
+            sequence, greedy=greedy, mask=mask
+        )
         self.last_tokenid = tokenid
-        return tokenid
+        return tokenid, entropy
 
     def load_checkpoint(self, checkpoint_name=None):
         if checkpoint_name is None:
@@ -59,7 +80,8 @@ class RandomAgent:
     def _reset_game(self):
         self.internal_game = TTTBoard()
 
-    def new_game(self):
+    def new_game(self, agent_id):
+        self.agent_id = agent_id  # "X" or "O"
         self._reset_game()
 
     def get_action(self, game_moves):

@@ -37,16 +37,26 @@ class TTTEnv:
 
         self.game = mechanics.TTTBoard()
         if agent_start:
-            self.agent_identity = "X"
+            self.agent_id = "X"
         else:
-            self.agent_identity = "O"
+            self.agent_id = "O"
             self._adversary_play()
-        return self._get_state(), "Game started."
+
+        return self._get_state(), {
+            "msg": "Game started.",
+            "agent_id": self.agent_id,
+        }
 
     def step(self, action):
         if action not in self.game.legal_moves:
             # print(f"Illegal move: {action}. Legal moves: {self.game.legal_moves}")
-            return self._get_state(), self.illegal_cost, False, True, "Illegal move."
+            return (
+                self._get_state(),
+                self.illegal_cost,
+                False,
+                True,
+                {"msg": "Illegal move."},
+            )
 
         self.game.push(action)
         if self.game.is_game_over():
@@ -56,7 +66,13 @@ class TTTEnv:
         if self.game.is_game_over():
             return self.get_game_over_state()
 
-        return self._get_state(), 0, False, False, "Keep playing."
+        return (
+            self._get_state(),
+            0,
+            False,
+            False,
+            {"msg": "Keep playing.", "legal_moves": self.game.legal_moves},
+        )
 
     def _adversary_play(self):
         adv_move = self.adversary.get_move(self.game, greedy=self.greedy_adversary)
@@ -71,11 +87,17 @@ class TTTEnv:
         assert self.game.is_game_over(), "Game is not over yet."
         if self.game.winner == "T":
             reward = 0
-        elif self.game.winner == self.agent_identity:
-            reward = 1
+        elif self.game.winner == self.agent_id:
+            reward = 1 - len(self.game.move_stack) * 0.02
         else:
-            reward = -1
-        return self._get_state(), reward, True, False, "Game over."
+            reward = -1 + len(self.game.move_stack) * 0.02
+        return (
+            self._get_state(),
+            reward,
+            True,
+            False,
+            {"msg": "Game over.", "winner": self.game.winner},
+        )
 
     def _get_state(self):
         return np.array(self.game.move_stack)
