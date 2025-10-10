@@ -35,7 +35,7 @@ if __name__ == "__main__":
         shutil.rmtree(logs_path)
     os.makedirs(logs_path, exist_ok=True)
 
-    group_size = 32
+    group_size = 64
     n_groups = 2
     end_lr_steps = 100000 / (group_size)
 
@@ -51,7 +51,7 @@ if __name__ == "__main__":
         epsilon_high=0.2,
         group_size=group_size,
         n_groups=n_groups,
-        learning_rate=5e-4,
+        learning_rate=5e-5,
         min_lr=5e-5,
         end_lr_steps=end_lr_steps,
     )
@@ -76,10 +76,10 @@ if __name__ == "__main__":
     # )
     # adversary = NNPlayer(adv_model, adv_encoder, mask_illegal=True, device=None)
 
-    env = TTTEnv(adversary, agent_start=None, greedy_adversary=True, illegal_cost=-5)
+    env = TTTEnv(adversary, agent_start=True, greedy_adversary=True, illegal_cost=-5)
     max_steps = 400_000
 
-    p_start = 0.5
+    p_start = 1
     full_eval(agent, env, writer, N_eval=250, prints=True, p_start=p_start)
 
     start_time = time.time()

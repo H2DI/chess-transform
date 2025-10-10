@@ -7,8 +7,10 @@ import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence
 from torch.optim.lr_scheduler import LambdaLR
 
+
 import chess_seq.tictactoe.mechanics as mechanics
 from chess_seq.tictactoe.agent import TTTAgent
+from torch.utils.tensorboard import SummaryWriter
 import chess_seq.utils as utils
 
 
@@ -72,9 +74,11 @@ class GRPO(TTTAgent):
     def reset(self):
         self.current_episode = []
 
-        self.current_log_ratios = []
-        self.current_rewards = []
-        self.current_entropies = []
+        self.group_agentids = []
+        self.group_sequences = []
+        self.group_tokenids = []
+        self.group_rewards = []
+        self.group_entropies = []
 
         self.optimizer = optim.Adam(
             params=self.updated_model.parameters(), lr=self.learning_rate
@@ -88,7 +92,7 @@ class GRPO(TTTAgent):
 
         self.n_eps = 0
 
-    def compute_log_probs(self, sequence, tokenids, model):
+    def group_log_probs(self, sequence, tokenids, agent_ids, model):
         """
         Example:
         agent_id = "X"
@@ -101,21 +105,58 @@ class GRPO(TTTAgent):
         logits :   [px1, po1, px2, po2, px3, po3]
         tokenids : [O1, O2, O3] taken at indices 1, 3, 5
 
+        [ST, X11, O11, X12, O12, X13]
+        [ST, X21, O21, X22, O22, X23]
+        [ST, X31, O31, X32, pad, pad]
+        [ST, X41, O41, X42, O42, X43]
+        agent_ids = ["X", "O", "X", "O"]
+        tokenids                   indices
+        [[X11, X12, X13],          [1, 3, 5],
+         [O21, O22, pad],          [2, 4, pad],
+         [X31, X32, pad],          [1, 3, 5],
+         [O41, O42, pad]]          [2, 4, pad]]
+
+        Since tokenids ids are padded, we can put a dummy value when gathering the logits.
+        The later masking will ignore these values.
+
+        TODO: TEST THIS CAREFULLY. With even and odd sequence lengths.
         """
-        unn_log_probs = model(sequence)
+        unn_log_probs = model(sequence)  # B, T, vocab_size
         log_probs = torch.log_softmax(unn_log_probs, dim=-1)
 
-        start_index = 0 if self.agent_id == "X" else 1
-        log_probs = log_probs[:, start_index::2, :]
+        L = log_probs.shape[1] // 2 + 1
+        start_indices = np.array([0 if i == "X" else 1 for i in agent_ids])  # (B,)
+        idx = (
+            start_indices[:, None, None] + np.arange(L)[None, :, None] * 2
+        )  # (B, L, 1)
+        idx = idx + np.arange(log_probs.shape[2])[None, None, :]  # (B, L, vocab_size)
+        idx = torch.tensor(idx, device=log_probs.device)
+        idx = idx.clamp(0, log_probs.shape[1] - 1)
+        log_probs = log_probs.gather(1, idx)  # (B, L, vocab_size)
+        return log_probs.gather(-1, tokenids.unsqueeze(-1)).squeeze(-1)  # (B, L)
 
-        return log_probs.gather(-1, tokenids).squeeze(-1).squeeze(0)
-
-    def optimizer_step(self, writer=None):
-        log_ratios = pad_sequence(
-            self.current_log_ratios, batch_first=True, padding_value=0.0
+    def optimizer_step(self, writer: SummaryWriter = None):
+        sequences_tensor = pad_sequence(
+            self.group_sequences,
+            batch_first=True,
+            padding_value=self.engine.end_tokenid,
         )  # (G, max_len)
 
-        lengths = [ep.shape[0] for ep in self.current_log_ratios]
+        group_tokenids = pad_sequence(
+            self.group_tokenids, batch_first=True, padding_value=0
+        )
+
+        log_probs = self.group_log_probs(
+            sequences_tensor, group_tokenids, self.group_agentids, self.updated_model
+        )  # (G, max_len)
+
+        with torch.no_grad():
+            old_log_probs = self.group_log_probs(
+                sequences_tensor, group_tokenids, self.group_agentids, self.engine.model
+            )
+        log_ratios = log_probs - old_log_probs  # (G, max_len)
+
+        lengths = [ep.shape[0] for ep in self.group_tokenids]
         max_len = max(lengths)
         masks = torch.zeros(
             (len(lengths), max_len), dtype=torch.bool, device=self.engine.device
@@ -123,7 +164,7 @@ class GRPO(TTTAgent):
         for i, length in enumerate(lengths):
             masks[i, :length] = True
 
-        rewards = torch.cat(self.current_rewards).unsqueeze(1)  # (G, 1)
+        rewards = torch.cat(self.group_rewards).unsqueeze(1)  # (G, 1)
         if rewards.std() < 1e-8:
             print("Group rewards have zero std, skipping update")
             return 0, 0
@@ -178,34 +219,28 @@ class GRPO(TTTAgent):
         )
 
     def update(self, state, action, reward, done, next_state, writer=None):
-        self.current_episode.append(self.last_tokenid)
-        self.current_entropies.append(self.last_token_entropy)
+        self.current_episode.append(self.last_tokenid[0, 0])
+        self.group_entropies.append(self.last_token_entropy)
 
         if done:
             self.n_eps += 1
 
-            self.current_rewards.append(
+            self.group_agentids.append(self.agent_id)
+
+            self.group_rewards.append(
                 torch.tensor([reward], dtype=torch.float32, device=self.engine.device)
             )
 
-            tokenids = torch.tensor(
-                np.array(self.current_episode),
-                dtype=torch.int64,
-                device=self.engine.device,
-            ).transpose(0, 1)  # (1, L, 1)
-
-            self.updated_model.train()
             sequence = mechanics.move_stack_to_sequence(
                 state, self.engine.encoder, self.engine.device
-            )
-            log_probs = self.compute_log_probs(sequence, tokenids, self.updated_model)
-            with torch.no_grad():
-                log_probs_old = self.compute_log_probs(
-                    sequence, tokenids, self.engine.model
-                )
+            )[0]  # (1, L)
+            self.group_sequences.append(sequence)
 
-            log_ratio = log_probs - log_probs_old
-            self.current_log_ratios.append(log_ratio)
+            self.group_tokenids.append(
+                torch.tensor(
+                    self.current_episode, dtype=torch.int64, device=self.engine.device
+                )
+            )
 
             self.current_episode = []
 
@@ -213,11 +248,14 @@ class GRPO(TTTAgent):
                 self.optimizer_step(writer=writer)
                 if writer is not None:
                     writer.add_scalar(
-                        "train/entropies", np.mean(self.current_entropies), self.n_eps
+                        "train/entropies", np.mean(self.group_entropies), self.n_eps
                     )
-                self.current_log_ratios = []
-                self.current_rewards = []
-                self.current_entropies = []
+
+                self.group_agentids = []
+                self.group_tokenids = []
+                self.group_sequences = []
+                self.group_rewards = []
+                self.group_entropies = []
 
             if (self.n_eps % (self.group_size * self.n_groups)) == 0:
                 self.engine.model.load_state_dict(self.updated_model.state_dict())
