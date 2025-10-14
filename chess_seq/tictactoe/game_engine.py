@@ -6,7 +6,7 @@ import chess_seq.tictactoe.mechanics as mechanics
 
 
 class TTTGameEngine:
-    def __init__(self, model, encoder, device=None):
+    def __init__(self, model: torch.nn.Module, encoder, device=None):
         self.model = model
         self.encoder = encoder
         self.device = device if device else next(model.parameters()).device
@@ -45,7 +45,7 @@ class TTTGameEngine:
 
     @torch.no_grad()
     def generate_next_tokenid(
-        self, sequence, greedy=True, predict_winner=False, mask=None
+        self, sequence: torch.Tensor, greedy=True, predict_winner=False, mask=None
     ):
         candidate_sequence = sequence.clone()
         out = self.model(candidate_sequence)  # B, T, vocab_size

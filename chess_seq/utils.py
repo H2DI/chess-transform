@@ -29,7 +29,7 @@ def get_latest_checkpoint(model_name, base_name="checkpoint"):
     return checkpoint_path
 
 
-def clone_model(model, requires_grad=False):
+def clone_model(model: torch.nn.Module, requires_grad=False) -> torch.nn.Module:
     cloned_model = type(model)(model.config)
     cloned_model.load_state_dict(model.state_dict())
     if not (requires_grad):

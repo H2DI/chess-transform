@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
     group_size = 64
     n_groups = 2
-    end_lr_steps = 100000 / (group_size)
+    end_lr_steps = 20000 / (group_size)
 
     eval_frequency = max(1000, group_size * n_groups)
 
@@ -46,14 +46,15 @@ if __name__ == "__main__":
         encoder,
         device=device,
         base_name=base_name,
-        beta=0.2,
+        beta=0,
         epsilon_low=0.1,
-        epsilon_high=0.2,
+        epsilon_high=0.15,
         group_size=group_size,
         n_groups=n_groups,
         learning_rate=5e-5,
-        min_lr=5e-5,
+        min_lr=1e-5,
         end_lr_steps=end_lr_steps,
+        writer=writer,
     )
 
     # agent = REINFORCE(
@@ -66,8 +67,8 @@ if __name__ == "__main__":
     # )
 
     # adversary = SimplePlayer()
-    adversary = RandomPlayer()
-    # adversary = ReasonablePlayer()
+    # adversary = RandomPlayer()
+    adversary = ReasonablePlayer()
 
     # adv_model, adv_encoder, _ = utils.load_model(
     #     "ttt_large_573440_GRPO",
@@ -90,11 +91,11 @@ if __name__ == "__main__":
         done = False
         legal_moves = env.game.legal_moves
         while not done:
-            action = agent.get_action(state, greedy=False, legals=legal_moves)
+            action = agent.get_action(state, greedy=True, legals=legal_moves)
             next_state, reward, terminated, truncated, info = env.step(action)
             legal_moves = info.get("legal_moves", [])
             done = terminated or truncated
-            agent.update(state, action, reward, done, next_state, writer=writer)
+            agent.update(state, action, reward, done, next_state)
             state = next_state
 
         if (i + 1) % eval_frequency == 1 and i > 0:

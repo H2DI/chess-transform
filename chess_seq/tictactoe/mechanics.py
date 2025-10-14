@@ -88,7 +88,7 @@ class TTTBoard:
 
     def print_game(self):
         i = 0
-        current_board = np.zeros((3, 3), dtype=str)
+        current_board = np.full((3, 3), "_", dtype=str)
         for move in self.move_stack:
             if i % 2 == 0:
                 print(i // 2)
@@ -137,6 +137,16 @@ def move_stack_to_sequence(move_stack, encoder, device):
         moves_list.append(move_to_tokens(move))
     encoded = encoder.transform(moves_list)
     return torch.tensor(np.array([encoded]), device=device)
+
+
+def sequence_to_move_stack(sequence, encoder):
+    tokens = encoder.inverse_transform(sequence)
+    move_stack = []
+    for token in tokens:
+        move = tokens_to_move(token, corrected=True)
+        if move is not None:
+            move_stack.append(move)
+    return move_stack
 
 
 def tokens_list():
