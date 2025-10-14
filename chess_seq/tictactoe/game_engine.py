@@ -45,21 +45,25 @@ class TTTGameEngine:
 
     @torch.no_grad()
     def generate_next_tokenid(
-        self, sequence: torch.Tensor, greedy=True, predict_winner=False, mask=None
+        self,
+        sequence: torch.Tensor,
+        temperature=0.0,
+        predict_winner=False,
+        mask=None,
     ):
         candidate_sequence = sequence.clone()
         out = self.model(candidate_sequence)  # B, T, vocab_size
         logits = out[0, -1]  # vocab_size
         if mask is not None:
             logits = logits + mask
-        if greedy:
+        if temperature == 0:
             next_tokenid = logits.argmax(dim=-1).unsqueeze(0).unsqueeze(0)
             entropy = 0
         else:
             if predict_winner:
                 # set logits to zero for all tokens that are not winners
                 pass
-            dist = torch.distributions.Categorical(logits=logits)
+            dist = torch.distributions.Categorical(logits=logits / temperature)
             entropy = dist.entropy().item()
             next_tokenid = dist.sample().unsqueeze(0).unsqueeze(0)
         candidate_sequence = torch.cat((candidate_sequence, next_tokenid), dim=1)
@@ -67,9 +71,9 @@ class TTTGameEngine:
 
 
 class TTTGamePlayer:
-    def __init__(self, model, encoder, game=None, device=None, greedy=True):
+    def __init__(self, model, encoder, game=None, device=None, temperature=0.0):
         self.engine = TTTGameEngine(model, encoder, device)
-        self.greedy = greedy
+        self.temperature = temperature
 
         if game is None:
             self.game = mechanics.TTTBoard()
@@ -93,7 +97,7 @@ class TTTGamePlayer:
 
         for _ in range(n_plies):
             tokenid, candidate_sequence, _ = self.engine.generate_next_tokenid(
-                self.sequence, greedy=self.greedy, predict_winner=False
+                self.sequence, temperature=self.temperature, predict_winner=False
             )
             self.current_ply += 1
 
@@ -110,7 +114,7 @@ class TTTGamePlayer:
 
     def _predict_end(self):
         tokenid, candidate_sequence, _ = self.engine.generate_next_tokenid(
-            self.sequence, greedy=self.greedy, predict_winner=False
+            self.sequence, temperature=self.temperature, predict_winner=False
         )
         self.current_ply += 1
         if tokenid == self.engine.end_tokenid:
@@ -133,7 +137,7 @@ class TTTGamePlayer:
         self.current_ply += 1
         winner = self.game.winner
         tokenid, _, _ = self.engine.generate_next_tokenid(
-            self.sequence, greedy=self.greedy, predict_winner=True
+            self.sequence, temperature=self.temperature, predict_winner=True
         )
         if winner == self.engine.encoder.inverse_transform([tokenid])[0]:
             self.winner_correctly_predicted = True

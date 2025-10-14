@@ -23,7 +23,8 @@ class ChessTrainerRunner:
         self.model_name = session_config.model_name
 
         if session_config.new_model:
-            self._initialize_new_model(model_config, training_config)
+            self._initialize_new_model(model_config)
+            self._initialize_training(training_config)
 
         self.training_state = self._load_checkpoint()
         self.model_config, self.training_config = self._load_configs()
@@ -75,20 +76,22 @@ class ChessTrainerRunner:
         scheduler.load_state_dict(self.training_state["scheduler_state_dict"])
         return optimizer, scheduler
 
-    def _initialize_new_model(self, model_config, training_config):
+    def _initialize_new_model(self, model_config):
         assert model_config is not None, (
             "Model configuration must be provided for new models"
         )
+        assert model_config.name == self.config.model_name, "Model name mismatch"
+        self.model_config = model_config
+        with open(model_config.encoder_path, "rb") as f:
+            self.encoder = pickle.load(f)
+        self.model = models.ChessNet(config=model_config).to(self.device)
+
+    def _initialize_training(self, training_config):
         assert training_config is not None, (
             "Training configuration must be provided for new models"
         )
-        assert model_config.name == self.config.model_name, "Model name mismatch"
-        self.model_config = model_config
         self.training_config = training_config
-        with open(model_config.encoder_path, "rb") as f:
-            self.encoder = pickle.load(f)
         self.n_steps, self.n_games, self.epoch, self.file_number = 0, 0, 0, 0
-        self.model = models.ChessNet(config=model_config).to(self.device)
         self.optimizer, self.scheduler = trainer.initialize_optimizer(
             training_config, self.model
         )

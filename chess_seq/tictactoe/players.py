@@ -12,15 +12,12 @@ Players are used in RL environments.
 
 
 class Player:
-    def __init__(self, epsilon=0):
-        self.epsilon = epsilon
-
-    def get_move(self, game, greedy=False):
+    def get_move(self, game, temperature=None):
         pass
 
 
 class RandomPlayer(Player):
-    def get_move(self, game: mechanics.TTTBoard, greedy=None):
+    def get_move(self, game: mechanics.TTTBoard, temperature=None):
         legal_moves = game.legal_moves
         if not legal_moves:
             return None, False
@@ -28,7 +25,7 @@ class RandomPlayer(Player):
 
 
 class SimplePlayer(Player):
-    def get_move(self, game: mechanics.TTTBoard, greedy=None):
+    def get_move(self, game: mechanics.TTTBoard, temperature=None):
         legal_moves = game.legal_moves
         if not legal_moves:
             return None, False
@@ -36,10 +33,7 @@ class SimplePlayer(Player):
 
 
 class ReasonablePlayer(Player):
-    def get_move(self, game: mechanics.TTTBoard, greedy=None):
-        if random.random() < self.epsilon:
-            return random.choice(game.legal_moves)
-
+    def get_move(self, game: mechanics.TTTBoard, temperature=None):
         legal_moves = game.legal_moves
 
         if not legal_moves:
@@ -96,7 +90,7 @@ class NNPlayer(Player):
                 mask[tokenid] = 0.0
             return mask
 
-    def get_move(self, game: mechanics.TTTBoard, greedy=True):
+    def get_move(self, game: mechanics.TTTBoard, temperature=0.0):
         """ """
         sequence = mechanics.board_to_sequence(
             game, self.engine.encoder, self.engine.device
@@ -104,7 +98,7 @@ class NNPlayer(Player):
         mask = self.build_mask(game)
 
         tokenid, _, entropy = self.engine.generate_next_tokenid(
-            sequence, greedy=greedy, mask=mask
+            sequence, temperature=temperature, mask=mask
         )
         token = self.engine.encoder.inverse_transform(tokenid[0])[0]
         move = mechanics.tokens_to_move(token)
@@ -114,7 +108,7 @@ class NNPlayer(Player):
         sequence = mechanics.board_to_sequence(
             game, self.engine.encoder, self.engine.device
         )
-        tokenid, _, _ = self.engine.generate_next_tokenid(sequence, greedy=True)
+        tokenid, _, _ = self.engine.generate_next_tokenid(sequence, temperature=0.0)
         token = self.engine.encoder.inverse_transform(tokenid[0])[0]
         return token
 
@@ -130,7 +124,7 @@ class NNPlayer(Player):
             dim=1,
         )
         tokenid, _, _ = self.engine.generate_next_tokenid(
-            sequence, greedy=True, predict_winner=True
+            sequence, temperature=0.0, predict_winner=True
         )
         token = self.engine.encoder.inverse_transform(tokenid[0])[0]
         return token

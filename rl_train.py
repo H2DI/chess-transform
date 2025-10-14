@@ -13,6 +13,7 @@ from chess_seq.tictactoe.evaluation import full_eval
 from torch.utils.tensorboard import SummaryWriter
 
 import chess_seq.utils as utils
+import chess_seq.models as models
 from configs import RLTraining
 
 import shutil
@@ -28,6 +29,8 @@ if __name__ == "__main__":
 
     model, encoder, checkpoint = utils.load_model(session.model_name)
     model_config = checkpoint["model_config"]
+    model = models.ChessNet(config=model_config).to(device)
+
     base_name = f"{model_config.name}_{checkpoint['n_games']}"
 
     logs_path = os.path.join(session.log_dir, session.model_name)
@@ -37,7 +40,7 @@ if __name__ == "__main__":
 
     group_size = 64
     n_groups = 2
-    end_lr_steps = 20000 / (group_size)
+    end_lr_steps = 40000 / (group_size)
 
     eval_frequency = max(1000, group_size * n_groups)
 
@@ -46,15 +49,16 @@ if __name__ == "__main__":
         encoder,
         device=device,
         base_name=base_name,
-        beta=0,
+        beta=0.05,
         epsilon_low=0.1,
-        epsilon_high=0.15,
+        epsilon_high=0.1,
         group_size=group_size,
         n_groups=n_groups,
         learning_rate=5e-5,
         min_lr=1e-5,
         end_lr_steps=end_lr_steps,
         writer=writer,
+        prints=False,
     )
 
     # agent = REINFORCE(
@@ -67,8 +71,8 @@ if __name__ == "__main__":
     # )
 
     # adversary = SimplePlayer()
-    # adversary = RandomPlayer()
-    adversary = ReasonablePlayer()
+    adversary = RandomPlayer()
+    # adversary = ReasonablePlayer()
 
     # adv_model, adv_encoder, _ = utils.load_model(
     #     "ttt_large_573440_GRPO",
@@ -77,10 +81,10 @@ if __name__ == "__main__":
     # )
     # adversary = NNPlayer(adv_model, adv_encoder, mask_illegal=True, device=None)
 
-    env = TTTEnv(adversary, agent_start=True, greedy_adversary=True, illegal_cost=-5)
+    env = TTTEnv(adversary, agent_start=True, adv_temperature=0.5, illegal_cost=-5)
     max_steps = 400_000
 
-    p_start = 1
+    p_start = 1.0
     full_eval(agent, env, writer, N_eval=250, prints=True, p_start=p_start)
 
     start_time = time.time()
@@ -91,7 +95,7 @@ if __name__ == "__main__":
         done = False
         legal_moves = env.game.legal_moves
         while not done:
-            action = agent.get_action(state, greedy=True, legals=legal_moves)
+            action = agent.get_action(state, temperature=0.5, legals=legal_moves)
             next_state, reward, terminated, truncated, info = env.step(action)
             legal_moves = info.get("legal_moves", [])
             done = terminated or truncated

@@ -20,6 +20,7 @@ class TrainingSession:
     data_folder: str
     encoder_path: str
 
+    new_model: bool
     num_epochs: int
     test_interval: int
     checkpoint_interval: int

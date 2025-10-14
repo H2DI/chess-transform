@@ -21,12 +21,12 @@ class TTTEnv:
         adversary: Player,
         agent_start=None,
         illegal_cost=-2,
-        greedy_adversary=True,
+        adv_temperature=0.0,
     ):
         self.adversary = adversary
         self.agent_start = agent_start
         self.illegal_cost = illegal_cost
-        self.greedy_adversary = greedy_adversary
+        self.adv_temperature = adv_temperature
         self.reset()
 
     def reset(self, agent_start=None):
@@ -75,7 +75,7 @@ class TTTEnv:
         )
 
     def _adversary_play(self):
-        adv_move = self.adversary.get_move(self.game, greedy=self.greedy_adversary)
+        adv_move = self.adversary.get_move(self.game, temperature=self.adv_temperature)
         assert adv_move in self.game.legal_moves, {
             "msg": "Adversary returned Bad move.",
             "move": adv_move,

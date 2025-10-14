@@ -35,22 +35,24 @@ class TTTAgent:
         return mask
 
     @no_grad()
-    def get_action(self, game_moves, greedy=True, legals=None):
+    def get_action(self, game_moves, temperature=0.0, legals=None):
         """ """
         self.engine.model.eval()
         mask = self._build_mask(legals) if legals is not None else None
-        tokenid, entropy = self._get_tokenid(game_moves, greedy=greedy, mask=mask)
+        tokenid, entropy = self._get_tokenid(
+            game_moves, temperature=temperature, mask=mask
+        )
         self.last_token_entropy = entropy
         token = self.engine.encoder.inverse_transform(tokenid[0])[0]
         move = mechanics.tokens_to_move(token, corrected=True)
         return move
 
-    def _get_tokenid(self, game_moves, greedy=True, mask=None):
+    def _get_tokenid(self, game_moves, temperature=0.0, mask=None):
         sequence = mechanics.move_stack_to_sequence(
             game_moves, self.engine.encoder, self.engine.device
         )
         tokenid, _, entropy = self.engine.generate_next_tokenid(
-            sequence, greedy=greedy, mask=mask
+            sequence, temperature=temperature, mask=mask
         )
         self.last_tokenid = tokenid
         return tokenid, entropy

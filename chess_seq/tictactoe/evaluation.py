@@ -7,7 +7,7 @@ from torch import no_grad
 
 @no_grad()
 def play_one_game(
-    agent: TTTAgent, env: TTTEnv, agent_start=True, greedy=True, mask_illegal=True
+    agent: TTTAgent, env: TTTEnv, agent_start=True, temperature=0.0, mask_illegal=True
 ):
     state, _ = env.reset(agent_start=agent_start)
     agent_id = "X" if agent_start else "O"
@@ -16,7 +16,7 @@ def play_one_game(
 
     done = False
     while not done:
-        action = agent.get_action(state, greedy=greedy, legals=legal_moves)
+        action = agent.get_action(state, temperature=temperature, legals=legal_moves)
         state, reward, terminated, truncated, info = env.step(action)
         legal_moves = info.get("legal_moves", [])
         done = terminated or truncated
@@ -42,7 +42,7 @@ def evaluate_agent(
     agent_id = "X" if agent_start else "O"
     for _ in range(N_eval):
         reward, truncated, result = play_one_game(
-            agent, env, agent_start=agent_start, greedy=True
+            agent, env, agent_start=agent_start, temperature=0.0
         )
         rewards.append(reward)
         if result == "T":
@@ -80,11 +80,11 @@ def full_eval(
 
     if p_start > 0:
         print("New game as X")
-        play_one_game(agent, env, agent_start=True, greedy=True)  # warm up
+        play_one_game(agent, env, agent_start=True, temperature=0.0)  # warm up
         env.game.print_game()
     if p_start < 1:
         print("New game as O")
-        play_one_game(agent, env, agent_start=False, greedy=True)  # warm up
+        play_one_game(agent, env, agent_start=False, temperature=0.0)  # warm up
         env.game.print_game()
 
     xwins, xlosses, xties, xills = evaluate_agent(
