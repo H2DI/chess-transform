@@ -173,3 +173,4 @@ working.ipynb
 configs.py
 synthetic_games/*
 logs/*
+test.py
