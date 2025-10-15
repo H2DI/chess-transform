@@ -14,51 +14,60 @@ from torch.utils.tensorboard import SummaryWriter
 
 import chess_seq.utils as utils
 import chess_seq.models as models
-from configs import RLTraining
+from configs import RLTraining, ModelConfig
 
 import shutil
 import torch
+import pickle
 import os
 import time
 
 
 if __name__ == "__main__":
     session = RLTraining()
+
     writer = SummaryWriter(f"{session.log_dir}/{session.model_name}")
     device = torch.device(session.device_str)
 
     model, encoder, checkpoint = utils.load_model(session.model_name)
     model_config = checkpoint["model_config"]
+    base_name = f"{model_config.name}_{checkpoint['n_games']}"
     model = models.ChessNet(config=model_config).to(device)
 
-    base_name = f"{model_config.name}_{checkpoint['n_games']}"
+    # model_config = ModelConfig()
+    # model = models.ChessNet(config=model_config).to(device)
+
+    with open(model_config.encoder_path, "rb") as f:
+        encoder = pickle.load(f)
+    base_name = f"{model_config.name}_GRPO"
 
     logs_path = os.path.join(session.log_dir, session.model_name)
     if os.path.exists(logs_path):
         shutil.rmtree(logs_path)
     os.makedirs(logs_path, exist_ok=True)
 
-    group_size = 64
-    n_groups = 2
+    group_size = 4
+    n_groups = 64
     end_lr_steps = 40000 / (group_size)
 
     eval_frequency = max(1000, group_size * n_groups)
+    rollout_temp = 0.5
 
     agent = GRPO(
         model,
         encoder,
         device=device,
         base_name=base_name,
-        beta=0.05,
-        epsilon_low=0.1,
-        epsilon_high=0.1,
+        beta=0,
+        epsilon_low=0.3,
+        epsilon_high=0.3,
         group_size=group_size,
         n_groups=n_groups,
         learning_rate=5e-5,
         min_lr=1e-5,
         end_lr_steps=end_lr_steps,
         writer=writer,
-        prints=False,
+        prints=True,
     )
 
     # agent = REINFORCE(
@@ -81,28 +90,36 @@ if __name__ == "__main__":
     # )
     # adversary = NNPlayer(adv_model, adv_encoder, mask_illegal=True, device=None)
 
-    env = TTTEnv(adversary, agent_start=True, adv_temperature=0.5, illegal_cost=-5)
-    max_steps = 400_000
+    env = TTTEnv(adversary, agent_start=None, illegal_cost=-5)
+    max_episodes = 400_000
 
-    p_start = 1.0
+    p_start = 0.5
     full_eval(agent, env, writer, N_eval=250, prints=True, p_start=p_start)
 
     start_time = time.time()
 
-    for i in range(max_steps):
-        state, info = env.reset()
-        agent.new_game(info["agent_id"])
-        done = False
-        legal_moves = env.game.legal_moves
-        while not done:
-            action = agent.get_action(state, temperature=0.5, legals=legal_moves)
-            next_state, reward, terminated, truncated, info = env.step(action)
-            legal_moves = info.get("legal_moves", [])
-            done = terminated or truncated
-            agent.update(state, action, reward, done, next_state)
-            state = next_state
+    ep_i = 0
+    group_i = 0
+    while ep_i < max_episodes:
+        agent_start = True if (group_i % 2 == 0) else False
+        group_i += 1
+        for j in range(group_size):
+            ep_i += 1
+            state, info = env.reset(agent_start=agent_start)
+            agent.new_game(info["agent_id"])
+            done = False
+            legal_moves = env.game.legal_moves
+            while not done:
+                action = agent.get_action(
+                    state, temperature=rollout_temp, legals=legal_moves
+                )
+                next_state, reward, terminated, truncated, info = env.step(action)
+                legal_moves = info.get("legal_moves", [])
+                done = terminated or truncated
+                agent.update(state, action, reward, done, next_state)
+                state = next_state
 
-        if (i + 1) % eval_frequency == 1 and i > 0:
+        if (ep_i + 1) % eval_frequency == 1 and ep_i > 0:
             print(f"Train time: {time.time() - start_time:.1f} seconds")
             wins, losses, _, illegal_moves = full_eval(
                 agent, env, writer, N_eval=250, p_start=p_start
@@ -121,6 +138,6 @@ if __name__ == "__main__":
                     print("No_loss model saved")
                     break
 
-        if (i + 1) % (5 * eval_frequency) == 0:
+        if (ep_i + 1) % (5 * eval_frequency) == 0:
             full_eval(agent, env, writer, N_eval=250, prints=True, p_start=p_start)
             agent.save_checkpoint(model_config)

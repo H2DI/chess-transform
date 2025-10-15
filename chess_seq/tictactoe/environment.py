@@ -88,9 +88,9 @@ class TTTEnv:
         if self.game.winner == "T":
             reward = 0
         elif self.game.winner == self.agent_id:
-            reward = 1 - len(self.game.move_stack) * 0.02
+            reward = 1 - len(self.game.move_stack) * 0.01
         else:
-            reward = -1 + len(self.game.move_stack) * 0.02
+            reward = -2 + len(self.game.move_stack) * 0.01
         return (
             self._get_state(),
             reward,

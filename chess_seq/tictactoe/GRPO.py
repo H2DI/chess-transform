@@ -18,7 +18,7 @@ class GRPO(TTTAgent):
     """
     Implement the formula for the score:
     \[
-        \sum_i \sum_t \min \left(
+        \sum \min \left(
             \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)} A_t,
                 \text{clip}\left(
                         \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)},
@@ -30,6 +30,8 @@ class GRPO(TTTAgent):
         - \beta KL\left(\pi_\theta\right) ||\pi_{\theta_{old}})
     \]
 
+    Using practice recommendations from:
+    https://arxiv.org/abs/2503.20783
     """
 
     def __init__(
@@ -59,6 +61,7 @@ class GRPO(TTTAgent):
 
         self.updated_model.to(device)
         self.engine.model.to(device)
+        self.updated_model.eval()
 
         self.beta = beta
         self.epsilon_low = epsilon_low
@@ -73,6 +76,7 @@ class GRPO(TTTAgent):
         self.device = device
         self.writer = writer
         self.prints = prints
+        self.debug_sequence = None
 
         self.reset()
 
@@ -115,6 +119,22 @@ class GRPO(TTTAgent):
 
             if (self.n_eps % (self.group_size * self.n_groups)) == 0:
                 self.engine.model.load_state_dict(self.updated_model.state_dict())
+                if self.prints:
+                    print(f"Updated old model to new model at episode {self.n_eps}.")
+                    print(
+                        "Comparing updated_model and engine.model outputs after sync..."
+                    )
+                    test_seq = self.debug_sequence.unsqueeze(0)
+                    test_mask = (
+                        torch.tril(
+                            torch.ones(test_seq.shape[1], test_seq.shape[1]), diagonal=0
+                        )
+                        .to(self.device)
+                        .bool()
+                    )
+                    out1 = self.updated_model(test_seq, mask=test_mask)
+                    out2 = self.engine.model(test_seq, mask=test_mask)
+                    print("Difference:", (out1 - out2).abs().max().item())
 
     def update_group_data(self, state, reward):
         self.group_agentids.append(self.agent_id)
@@ -124,6 +144,7 @@ class GRPO(TTTAgent):
         sequence = mechanics.move_stack_to_sequence(
             state, self.engine.encoder, self.device
         )[0]
+        self.debug_sequence = sequence
         self.group_sequences.append(sequence)
 
         self.group_tokenids.append(
@@ -131,9 +152,42 @@ class GRPO(TTTAgent):
         )
 
     def optimizer_step(self):
+        """
+        9 is the padding token. Mask removes the padding tokens in the score computation. Example with group_size=3. We want to compute
+        pi(a_t|s_t) for t the time steps where the agent played.
+        States:
+        group_sequence=tensor([[11,  3,  4,  6,  8,  9,  9],
+                                [11,  8,  0,  2,  1,  4,  9],
+                                [11,  8,  6,  0,  7,  2,  4]])
+        Actions:
+        group_tokenids=tensor([[3, 6, 0, 9],
+                                [0, 1, 6, 9],
+                                [8, 0, 2, 3]])
+        agent_ids=['X', 'O', 'X']
+        start_indices=tensor([0, 1, 0])
+        Tokens locations grabbed in 'log_probs', when applied to 'sequence':
+        tensor([[[11],
+                [ 4],
+                [ 8],
+                [ 9]],
+
+                [[ 8],
+                [ 2],
+                [ 4],
+                [ 9]],
+
+                [[11],
+                [ 6],
+                [ 7],
+                [ 4]]])
+        masks=tensor([[ True,  True,  True, False],
+                        [ True,  True,  True, False],
+                        [ True,  True,  True,  True]])
+        """
         log_ratios = self.compute_log_ratios()  # (G, L)
         masks = self.compute_mask()  # (G, L)
         if self.prints:
+            print(f"log_ratios (should be ~0 if models are identical):\n{log_ratios}")
             print(f"{masks=}")
             print("----------------------")
 
@@ -143,12 +197,11 @@ class GRPO(TTTAgent):
             print("Group rewards have zero std, skipping update")
             return
         else:
-            advantages = (rewards - rewards.mean()) / (rewards.std() + 1e-3)
+            advantages = rewards - rewards.mean()  # / (rewards.std() + 1e-3)
 
         ratios = torch.exp(log_ratios)  # (G, L)
         score1 = ratios * advantages
         score2 = ratios.clamp(1 - self.epsilon_low, 1 + self.epsilon_high) * advantages
-        # (G, L)
 
         # Masking flattens / modern version: all tokens count equally
         unregularized_score = torch.minimum(score1, score2)[masks].mean()
@@ -158,6 +211,7 @@ class GRPO(TTTAgent):
 
         self.optimizer.zero_grad()
         neg_score = -score
+
         neg_score.backward()
         torch.nn.utils.clip_grad_norm_(self.updated_model.parameters(), max_norm=10.0)
         self.optimizer.step()
@@ -215,7 +269,8 @@ class GRPO(TTTAgent):
     ):
         """ """
         T = sequence.shape[1]
-        causal_mask = torch.tril(torch.ones(T, T)).to(self.device).bool()
+        causal_mask = torch.tril(torch.ones(T, T), diagonal=0).to(self.device).bool()
+        # print(f"{causal_mask=}")
         unn_log_probs = model(sequence, mask=causal_mask)  # G, T, V
         log_probs = torch.log_softmax(unn_log_probs, dim=-1)
 

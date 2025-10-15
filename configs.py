@@ -4,13 +4,13 @@ from typing import List
 
 @dataclass
 class ModelConfig:
-    name: str = "ttt_small_zero"
+    name: str = "ttt_tiny"
     vocab_size: int = 14
     block_size: int = 12
     n_head: int = 4
     n_layers: int = 3
-    dropout: int = 0.1
-    k: int = 32  # k needs to be divisible by n_head
+    dropout: int = 0.0
+    k: int = 8  # k needs to be divisible by n_head
 
     special_freqs: List[float] = field(default_factory=lambda: [2 * 3.14159 / 2])
     encoder_path: str = "data/ttt_encoder.pkl"

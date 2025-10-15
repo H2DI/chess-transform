@@ -1,6 +1,8 @@
 import random
 import numpy as np
 import torch
+from torch import no_grad
+import torch.nn as nn
 
 from chess_seq.tictactoe.game_engine import TTTGameEngine
 import chess_seq.tictactoe.mechanics as mechanics
@@ -72,13 +74,14 @@ class ReasonablePlayer(Player):
 
 
 class NNPlayer(Player):
-    def __init__(self, model, encoder, mask_illegal=True, device=None):
+    def __init__(self, model: nn.Module, encoder, mask_illegal=True, device=None):
         super().__init__()
         self.engine = TTTGameEngine(model, encoder, device=device)
         self.engine.model.eval()
         self.mask_illegal = mask_illegal
 
-    def build_mask(self, game):
+    @no_grad()
+    def build_mask(self, game: mechanics.TTTBoard):
         mask = torch.zeros(self.engine.vocab_size, device=self.engine.device)
         if not (self.mask_illegal):
             return mask
@@ -90,6 +93,7 @@ class NNPlayer(Player):
                 mask[tokenid] = 0.0
             return mask
 
+    @no_grad()
     def get_move(self, game: mechanics.TTTBoard, temperature=0.0):
         """ """
         sequence = mechanics.board_to_sequence(
@@ -104,7 +108,9 @@ class NNPlayer(Player):
         move = mechanics.tokens_to_move(token)
         return move
 
+    @no_grad()
     def predict_end(self, game):
+        """WIP"""
         sequence = mechanics.board_to_sequence(
             game, self.engine.encoder, self.engine.device
         )
@@ -112,7 +118,9 @@ class NNPlayer(Player):
         token = self.engine.encoder.inverse_transform(tokenid[0])[0]
         return token
 
+    @no_grad()
     def predict_winner(self, game):
+        """WIP"""
         sequence = mechanics.board_to_sequence(
             game, self.engine.encoder, self.engine.device
         )
