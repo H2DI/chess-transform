@@ -33,7 +33,7 @@ class GRPOConfig:
     epsilon_low = 0.1
     epsilon_high = 0.3
 
-    group_size = 2
+    group_size = 128
     groups_between_prompts = 2
     prompts_between_models = 2
 
@@ -43,7 +43,7 @@ class GRPOConfig:
     min_lr = 1e-4
     end_lr_steps = 50000
 
-    debug_prints = True
+    debug_prints = False
 
 
 @dataclass

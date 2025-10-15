@@ -106,7 +106,6 @@ class GRPO(TTTAgent):
 
     def end_episode_update(self, state, reward):
         self.n_eps += 1
-        self.group_agentids.append(self.agent_id)
         rewards = torch.tensor([reward], dtype=torch.float32, device=self.device)
         self.group_rewards.append(rewards)
 
@@ -217,45 +216,31 @@ class GRPO(TTTAgent):
         unn_log_probs = model(sequence, mask=causal_mask)  # G, T, V
         log_probs = torch.log_softmax(unn_log_probs, dim=-1)
 
-        start_indices = torch.tensor(
-            [0 if i == "X" else 1 for i in self.group_agentids],
-            dtype=torch.int64,
-            device=sequence.device,
-        )
-        if prints:
-            print(f"{self.group_agentids=}")
-            print(f"{start_indices=}")
-
-        played_log_probs = self.grab_play_indices(
-            start_indices, log_probs, prints
-        )  # (G, L, V)
+        played_log_probs = self.grab_play_indices(log_probs, prints)  # (G, L, V)
 
         return played_log_probs.gather(-1, tokenids.unsqueeze(-1)).squeeze(-1)  # (G, L)
 
-    def grab_play_indices(
-        self, start_indices: torch.Tensor, log_probs: torch.Tensor, prints=False
-    ):
+    def grab_play_indices(self, log_probs: torch.Tensor, prints=False):
         """
         Given tensor of log_probs of shape (B, T, vocab_size)
-        and start_indices of shape (B,) with values 0 or 1
-        returns the log_probs at indices [i, 2*j + start_indices[i], :]
-        (if 2 * j + start_indices[i] >= T, uses T-1 instead,
+        and start_index with value 0 or 1
+        returns the log_probs at indices [i, 2*j + start_index, :]
         which does not matter since these will be masked out later)
         """
-
+        start_index = 0 if self.agent_id == "X" else 1
         max_len = log_probs.shape[1]
-        L = max_len // 2 + max_len % 2
-        idx = torch.arange(L, device=self.device).unsqueeze(
-            0
-        ) * 2 + start_indices.unsqueeze(1)
-        # (G, L)
-        idx = idx.unsqueeze(-1).expand(-1, -1, log_probs.shape[2])  # (G, L, vocab_size)
-        idx = idx.clamp(0, max_len - 1)
+
+        # remove 1 if max_len even and agent is O (len 10 -> 4 moves for O)
+        L = max_len // 2 - (1 - max_len % 2) * start_index
+        idx = torch.arange(L, device=self.device).unsqueeze(0) * 2 + start_index
+
+        idx = idx.unsqueeze(-1).expand(
+            log_probs.shape[0], -1, log_probs.shape[2]
+        )  # (G, L, vocab_size)
         if prints:
-            with torch.no_grad():
-                print(f"{idx=}")
-        if prints:
+            print(f"{self.agent_id=}")
             print(f"{log_probs.shape=}")
+            print(f"{idx=}")
             print(f"{idx.shape=}")
             print(f"{log_probs.gather(1, idx).shape=}")
         return log_probs.gather(1, idx)  # (G, L, vocab_size)
@@ -271,7 +256,6 @@ class GRPO(TTTAgent):
         return masks
 
     def _clean_group_data(self):
-        self.group_agentids = []
         self.group_tokenids = []
         self.group_sequences = []
         self.group_rewards = []
