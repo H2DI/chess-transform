@@ -84,7 +84,7 @@ class ChessTrainerRunner:
         self.model_config = model_config
         with open(model_config.encoder_path, "rb") as f:
             self.encoder = pickle.load(f)
-        self.model = models.ChessNet(config=model_config).to(self.device)
+        utils.build_and_save_model(model_config)
 
     def _initialize_training(self, training_config):
         assert training_config is not None, (

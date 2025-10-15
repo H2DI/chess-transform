@@ -14,12 +14,12 @@ Players are used in RL environments.
 
 
 class Player:
-    def get_move(self, game, temperature=None):
+    def get_move(self, game):
         pass
 
 
 class RandomPlayer(Player):
-    def get_move(self, game: mechanics.TTTBoard, temperature=None):
+    def get_move(self, game: mechanics.TTTBoard):
         legal_moves = game.legal_moves
         if not legal_moves:
             return None, False
@@ -27,7 +27,7 @@ class RandomPlayer(Player):
 
 
 class SimplePlayer(Player):
-    def get_move(self, game: mechanics.TTTBoard, temperature=None):
+    def get_move(self, game: mechanics.TTTBoard):
         legal_moves = game.legal_moves
         if not legal_moves:
             return None, False
@@ -35,7 +35,7 @@ class SimplePlayer(Player):
 
 
 class ReasonablePlayer(Player):
-    def get_move(self, game: mechanics.TTTBoard, temperature=None):
+    def get_move(self, game: mechanics.TTTBoard):
         legal_moves = game.legal_moves
 
         if not legal_moves:

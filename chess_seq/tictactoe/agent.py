@@ -6,21 +6,22 @@ from chess_seq.tictactoe import mechanics
 from chess_seq.tictactoe.game_engine import TTTGameEngine
 from chess_seq.tictactoe.mechanics import TTTBoard
 from torch import no_grad
+from configs import ModelConfig
 
 
 class TTTAgent:
     def __init__(
         self,
+        model_config: ModelConfig,
         model,
-        encoder,
         device=None,
         full_name="Generic_TTTAgent",
-        self_mask_illegal=True,
     ):
-        self.engine = TTTGameEngine(model, encoder, device=device)
+        self.engine = TTTGameEngine(model_config, model, device=device)
         self.full_name = full_name
         self.last_tokenid = None
         self.last_token_entropy = None
+        self.temperature = 0.0
 
     def new_game(self, agent_id):
         self.agent_id = agent_id  # "X" or "O"
@@ -35,8 +36,10 @@ class TTTAgent:
         return mask
 
     @no_grad()
-    def get_action(self, game_moves, temperature=0.0, legals=None):
+    def get_action(self, game_moves, temperature=None, legals=None):
         """ """
+        if temperature is None:
+            temperature = self.temperature
         self.engine.model.eval()
         mask = self._build_mask(legals) if legals is not None else None
         tokenid, entropy = self._get_tokenid(

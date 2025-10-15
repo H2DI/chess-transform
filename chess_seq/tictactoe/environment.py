@@ -1,6 +1,5 @@
 from chess_seq.tictactoe import mechanics
 from chess_seq.tictactoe.players import Player
-import random
 import numpy as np
 
 
@@ -21,19 +20,18 @@ class TTTEnv:
         adversary: Player,
         agent_start=None,
         illegal_cost=-2,
-        adv_temperature=0.0,
     ):
         self.adversary = adversary
-        self.agent_start = agent_start
         self.illegal_cost = illegal_cost
-        self.adv_temperature = adv_temperature
-        self.reset()
+        self.agent_start = agent_start
+        self.set_new_prompt()
+        self.reset_to_prompt()
 
     def reset(self, agent_start=None):
-        if agent_start is None and self.agent_start is not None:
+        if agent_start is None and self.agent_start is None:
+            agent_start = np.random.rand() < 0.5
+        elif agent_start is None:
             agent_start = self.agent_start
-        elif agent_start is None and self.agent_start is None:
-            agent_start = random.choice([True, False])
 
         self.game = mechanics.TTTBoard()
         if agent_start:
@@ -45,11 +43,38 @@ class TTTEnv:
         return self._get_state(), {
             "msg": "Game started.",
             "agent_id": self.agent_id,
+            "legal_moves": self.game.legal_moves,
+        }
+
+    def set_new_prompt(self):
+        if self.agent_start is None:
+            prompt_agent_start = np.random.rand() < 0.5
+        else:
+            prompt_agent_start = self.agent_start
+
+        if prompt_agent_start:
+            self.prompt_id = "X"
+            self.prompt = []
+        else:
+            self.prompt_id = "O"
+            game = mechanics.TTTBoard()
+            adv_move = self.adversary.get_move(game)
+            self.prompt = [adv_move]
+
+    def reset_to_prompt(self):
+        self.game = mechanics.TTTBoard()
+        self.agent_id = self.prompt_id
+        for action in self.prompt:
+            self.game.push(action)
+
+        return self._get_state(), {
+            "msg": "Game started.",
+            "agent_id": self.agent_id,
+            "legal_moves": self.game.legal_moves,
         }
 
     def step(self, action):
         if action not in self.game.legal_moves:
-            # print(f"Illegal move: {action}. Legal moves: {self.game.legal_moves}")
             return (
                 self._get_state(),
                 self.illegal_cost,
@@ -75,7 +100,7 @@ class TTTEnv:
         )
 
     def _adversary_play(self):
-        adv_move = self.adversary.get_move(self.game, temperature=self.adv_temperature)
+        adv_move = self.adversary.get_move(self.game)
         assert adv_move in self.game.legal_moves, {
             "msg": "Adversary returned Bad move.",
             "move": adv_move,
@@ -90,7 +115,7 @@ class TTTEnv:
         elif self.game.winner == self.agent_id:
             reward = 1 - len(self.game.move_stack) * 0.01
         else:
-            reward = -2 + len(self.game.move_stack) * 0.01
+            reward = -1 + len(self.game.move_stack) * 0.01
         return (
             self._get_state(),
             reward,

@@ -12,6 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 import chess_seq.tictactoe.mechanics as mechanics
 from chess_seq.tictactoe.agent import TTTAgent
 from chess_seq.utils import clone_model
+from configs import GRPOConfig, ModelConfig
 
 
 class GRPO(TTTAgent):
@@ -36,47 +37,44 @@ class GRPO(TTTAgent):
 
     def __init__(
         self,
-        model,
-        encoder,
-        base_name,
-        beta,
-        epsilon_low,
-        epsilon_high,
-        group_size,
-        n_groups,
-        learning_rate,
-        min_lr,
-        end_lr_steps,
-        device=None,
+        model_config: ModelConfig,
+        model: torch.nn.Module,
+        grpo_config: GRPOConfig,
         writer: SummaryWriter = None,
-        prints=False,
     ):
-        self.full_name = base_name + "_GRPO"
-        super().__init__(model, encoder, full_name=self.full_name, device=device)
+        self.full_name = grpo_config.model_name + "_GRPO"
+        device = torch.device(grpo_config.device_str)
+        super().__init__(model_config, model, full_name=self.full_name, device=device)
+        self.engine.model.to(device)
         self.engine.model.eval()
         for p in self.engine.model.parameters():
             p.requires_grad_(False)
 
         self.updated_model = clone_model(model, requires_grad=True)
-
         self.updated_model.to(device)
-        self.engine.model.to(device)
         self.updated_model.eval()
 
-        self.beta = beta
-        self.epsilon_low = epsilon_low
-        self.epsilon_high = epsilon_high
-        self.n_groups = n_groups
+        self.rollout_temperature = grpo_config.rollout_temperature
 
-        self.group_size = group_size
-        self.learning_rate = learning_rate
+        self.beta = grpo_config.beta
+        self.epsilon_low = grpo_config.epsilon_low
+        self.epsilon_high = grpo_config.epsilon_high
+        self.temperature = grpo_config.rollout_temperature
 
-        self.total_steps = end_lr_steps
-        self.min_lr = min_lr
+        self.group_size = grpo_config.group_size
+        self.groups_between_prompts = grpo_config.groups_between_prompts
+        self.prompts_between_models = grpo_config.prompts_between_models
+
+        self.learning_rate = grpo_config.learning_rate
+        self.min_lr = grpo_config.min_lr
+        self.total_steps = grpo_config.end_lr_steps
+
+        self.eval_frequency = grpo_config.eval_frequency
+
         self.device = device
         self.writer = writer
-        self.prints = prints
-        self.debug_sequence = None
+        self.prints = grpo_config.debug_prints
+        self.p_start = grpo_config.p_start
 
         self.reset()
 
@@ -91,52 +89,23 @@ class GRPO(TTTAgent):
         # self.scheduler = LambdaLR(
         #     self.optimizer,
         #     lr_lambda=lambda step: max(
-        #         self.min_lr / self.learning_rate, 1 - step / self.total_steps
+        #         self.min_lr / self.learning_rate, 1 - step * self.group_size / self.total_steps
         #     ),
         # )
         self.lr_lambda = lambda step: self.min_lr / self.learning_rate + 0.5 * (
             1 - self.min_lr / self.learning_rate
-        ) * (1 + np.cos(np.pi * min(1, step / self.total_steps)))
+        ) * (1 + np.cos(np.pi * min(1, step * self.group_size / self.total_steps)))
         # * (
-        #     1 / 3 + (2 / 3) * max(0, 1 - step / (3 * self.total_steps))
+        #     1 / 3 + (2 / 3) * max(0, 1 - step * self.group_size / (3 * self.total_steps))
         # )
         self.scheduler = LambdaLR(self.optimizer, lr_lambda=self.lr_lambda)
 
-    def update(self, state, action, reward, done, next_state):
+    def update(self):
         self.current_episode.append(self.last_tokenid[0, 0])
         self.group_entropies.append(self.last_token_entropy)
 
-        if done:
-            self.n_eps += 1
-
-            self.update_group_data(state, reward)
-            self.current_episode = []
-
-            if (self.n_eps % self.group_size) == 0:
-                self.optimizer_step()
-                self.log_entropy()
-                self._clean_group_data()
-
-            if (self.n_eps % (self.group_size * self.n_groups)) == 0:
-                self.engine.model.load_state_dict(self.updated_model.state_dict())
-                if self.prints:
-                    print(f"Updated old model to new model at episode {self.n_eps}.")
-                    print(
-                        "Comparing updated_model and engine.model outputs after sync..."
-                    )
-                    test_seq = self.debug_sequence.unsqueeze(0)
-                    test_mask = (
-                        torch.tril(
-                            torch.ones(test_seq.shape[1], test_seq.shape[1]), diagonal=0
-                        )
-                        .to(self.device)
-                        .bool()
-                    )
-                    out1 = self.updated_model(test_seq, mask=test_mask)
-                    out2 = self.engine.model(test_seq, mask=test_mask)
-                    print("Difference:", (out1 - out2).abs().max().item())
-
-    def update_group_data(self, state, reward):
+    def end_episode_update(self, state, reward):
+        self.n_eps += 1
         self.group_agentids.append(self.agent_id)
         rewards = torch.tensor([reward], dtype=torch.float32, device=self.device)
         self.group_rewards.append(rewards)
@@ -144,53 +113,31 @@ class GRPO(TTTAgent):
         sequence = mechanics.move_stack_to_sequence(
             state, self.engine.encoder, self.device
         )[0]
-        self.debug_sequence = sequence
         self.group_sequences.append(sequence)
 
         self.group_tokenids.append(
             torch.tensor(self.current_episode, dtype=torch.int64, device=self.device)
         )
 
-    def optimizer_step(self):
+        self.current_episode = []
+
+    def end_group_update(self):
+        self._optimizer_step()
+        self._log_entropy()
+        self._clean_group_data()
+
+    def copy_updated_to_actor(self):
+        if self.prints:
+            print("Copying updated model to actor model")
+        self.engine.model.load_state_dict(self.updated_model.state_dict())
+
+    def _optimizer_step(self):
         """
         9 is the padding token. Mask removes the padding tokens in the score computation. Example with group_size=3. We want to compute
         pi(a_t|s_t) for t the time steps where the agent played.
-        States:
-        group_sequence=tensor([[11,  3,  4,  6,  8,  9,  9],
-                                [11,  8,  0,  2,  1,  4,  9],
-                                [11,  8,  6,  0,  7,  2,  4]])
-        Actions:
-        group_tokenids=tensor([[3, 6, 0, 9],
-                                [0, 1, 6, 9],
-                                [8, 0, 2, 3]])
-        agent_ids=['X', 'O', 'X']
-        start_indices=tensor([0, 1, 0])
-        Tokens locations grabbed in 'log_probs', when applied to 'sequence':
-        tensor([[[11],
-                [ 4],
-                [ 8],
-                [ 9]],
-
-                [[ 8],
-                [ 2],
-                [ 4],
-                [ 9]],
-
-                [[11],
-                [ 6],
-                [ 7],
-                [ 4]]])
-        masks=tensor([[ True,  True,  True, False],
-                        [ True,  True,  True, False],
-                        [ True,  True,  True,  True]])
         """
         log_ratios = self.compute_log_ratios()  # (G, L)
         masks = self.compute_mask()  # (G, L)
-        if self.prints:
-            print(f"log_ratios (should be ~0 if models are identical):\n{log_ratios}")
-            print(f"{masks=}")
-            print("----------------------")
-
         rewards = torch.cat(self.group_rewards).unsqueeze(1)  # (G, 1)
 
         if rewards.std() < 1e-8:
@@ -198,6 +145,12 @@ class GRPO(TTTAgent):
             return
         else:
             advantages = rewards - rewards.mean()  # / (rewards.std() + 1e-3)
+
+        if self.prints:
+            print(f"log_ratios (should be ~0 if models are identical):\n{log_ratios}")
+            print(f"{rewards=}")
+            print(f"{masks=}")
+            print("----------------------")
 
         ratios = torch.exp(log_ratios)  # (G, L)
         score1 = ratios * advantages
@@ -217,19 +170,12 @@ class GRPO(TTTAgent):
         self.optimizer.step()
         self.scheduler.step()
 
-        self.log_training(
+        self._log_training(
             KL.item(),
             unregularized_score.item(),
             rewards.cpu().numpy().mean(),
             rewards.cpu().numpy().std(),
         )
-
-    def _clean_group_data(self):
-        self.group_agentids = []
-        self.group_tokenids = []
-        self.group_sequences = []
-        self.group_rewards = []
-        self.group_entropies = []
 
     def compute_log_ratios(self):
         group_sequence = pad_sequence(
@@ -248,14 +194,13 @@ class GRPO(TTTAgent):
         log_probs = self.group_log_probs(
             group_sequence,
             group_tokenids,
-            self.group_agentids,
             self.updated_model,
             prints=self.prints,
         )  # (G, L)
 
         with torch.no_grad():
             old_log_probs = self.group_log_probs(
-                group_sequence, group_tokenids, self.group_agentids, self.engine.model
+                group_sequence, group_tokenids, self.engine.model
             )
         return log_probs - old_log_probs  # (G, L)
 
@@ -263,35 +208,33 @@ class GRPO(TTTAgent):
         self,
         sequence: torch.Tensor,
         tokenids: torch.Tensor,
-        agent_ids: torch.Tensor,
         model: torch.nn.Module,
         prints=False,
     ):
         """ """
         T = sequence.shape[1]
         causal_mask = torch.tril(torch.ones(T, T), diagonal=0).to(self.device).bool()
-        # print(f"{causal_mask=}")
         unn_log_probs = model(sequence, mask=causal_mask)  # G, T, V
         log_probs = torch.log_softmax(unn_log_probs, dim=-1)
 
         start_indices = torch.tensor(
-            [0 if i == "X" else 1 for i in agent_ids],
+            [0 if i == "X" else 1 for i in self.group_agentids],
             dtype=torch.int64,
             device=sequence.device,
         )
         if prints:
-            print(f"{agent_ids=}")
+            print(f"{self.group_agentids=}")
             print(f"{start_indices=}")
-            with torch.no_grad():
-                print(
-                    f"Tokens grabbed in 'sequence' \n {self.grab_play_indices(start_indices, sequence.unsqueeze(-1))}"
-                )
 
-        played_log_probs = self.grab_play_indices(start_indices, log_probs)  # (G, L, V)
+        played_log_probs = self.grab_play_indices(
+            start_indices, log_probs, prints
+        )  # (G, L, V)
 
         return played_log_probs.gather(-1, tokenids.unsqueeze(-1)).squeeze(-1)  # (G, L)
 
-    def grab_play_indices(self, start_indices: torch.Tensor, log_probs: torch.Tensor):
+    def grab_play_indices(
+        self, start_indices: torch.Tensor, log_probs: torch.Tensor, prints=False
+    ):
         """
         Given tensor of log_probs of shape (B, T, vocab_size)
         and start_indices of shape (B,) with values 0 or 1
@@ -308,6 +251,13 @@ class GRPO(TTTAgent):
         # (G, L)
         idx = idx.unsqueeze(-1).expand(-1, -1, log_probs.shape[2])  # (G, L, vocab_size)
         idx = idx.clamp(0, max_len - 1)
+        if prints:
+            with torch.no_grad():
+                print(f"{idx=}")
+        if prints:
+            print(f"{log_probs.shape=}")
+            print(f"{idx.shape=}")
+            print(f"{log_probs.gather(1, idx).shape=}")
         return log_probs.gather(1, idx)  # (G, L, vocab_size)
 
     def compute_mask(self):
@@ -320,7 +270,14 @@ class GRPO(TTTAgent):
             masks[i, :length] = True
         return masks
 
-    def log_training(self, KL_item, unregularized_score_item, reward_mean, reward_std):
+    def _clean_group_data(self):
+        self.group_agentids = []
+        self.group_tokenids = []
+        self.group_sequences = []
+        self.group_rewards = []
+        self.group_entropies = []
+
+    def _log_training(self, KL_item, unregularized_score_item, reward_mean, reward_std):
         if self.writer is not None:
             self.writer.add_scalar("score/group_rewards_mean", reward_mean, self.n_eps)
             self.writer.add_scalar("score/group_rewards_std", reward_std, self.n_eps)
@@ -346,7 +303,7 @@ class GRPO(TTTAgent):
             lr = self.scheduler.get_last_lr()[0]
             self.writer.add_scalar("train/learning_rate", lr, self.n_eps)
 
-    def log_entropy(self):
+    def _log_entropy(self):
         if self.writer is not None:
             self.writer.add_scalar(
                 "train/entropies", np.mean(self.group_entropies), self.n_eps
@@ -359,9 +316,9 @@ class GRPO(TTTAgent):
         self.lr = rl_checkpoint["lr"]
         self.n_eps = rl_checkpoint["n_eps"]
 
-    def save_checkpoint(self, model_config, checkpoint_name=None):
+    def save_checkpoint(self, checkpoint_name=None):
         rl_checkpoint = {
-            "model_config": model_config,
+            "model_config": self.engine.model_config,
             "encoder": self.engine.encoder,
             "lr": self.learning_rate,
             "n_eps": self.n_eps,

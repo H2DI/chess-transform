@@ -27,7 +27,6 @@ def play_one_game(
 def evaluate_agent(
     agent: TTTAgent,
     env: TTTEnv,
-    writer,
     N_eval=100,
     prints=False,
     agent_start=True,
@@ -57,12 +56,14 @@ def evaluate_agent(
     losses = np.sum(scores == -1) / N_eval
     ties = np.sum(scores == 0) / N_eval
     illegal_moves = np.sum(illegal_moves) / N_eval
-    writer.add_scalar(f"eval{agent_id}/wins", wins, agent.n_eps)
-    writer.add_scalar(f"eval{agent_id}/losses", losses, agent.n_eps)
-    writer.add_scalar(f"eval{agent_id}/ties", ties, agent.n_eps)
+    agent.writer.add_scalar(f"eval{agent_id}/wins", wins, agent.n_eps)
+    agent.writer.add_scalar(f"eval{agent_id}/losses", losses, agent.n_eps)
+    agent.writer.add_scalar(f"eval{agent_id}/ties", ties, agent.n_eps)
     if log_illegal:
-        writer.add_scalar(f"eval{agent_id}/illegal_moves", illegal_moves, agent.n_eps)
-    writer.add_scalar(f"eval{agent_id}/reward", np.mean(rewards), agent.n_eps)
+        agent.writer.add_scalar(
+            f"eval{agent_id}/illegal_moves", illegal_moves, agent.n_eps
+        )
+    agent.writer.add_scalar(f"eval{agent_id}/reward", np.mean(rewards), agent.n_eps)
     if prints:
         print(f"Evaluation results over {N_eval} games, player {agent_id}:")
         print(f"Wins: {wins * 100:.2f}%")
@@ -73,7 +74,7 @@ def evaluate_agent(
 
 
 def full_eval(
-    agent, env: TTTEnv, writer, N_eval=200, prints=False, p_start=0.5, log_illegal=False
+    agent, env: TTTEnv, N_eval=200, prints=False, p_start=0.5, log_illegal=False
 ):
     if prints:
         print(f"Starting full evaluation after {agent.n_eps} games played.")
@@ -90,7 +91,6 @@ def full_eval(
     xwins, xlosses, xties, xills = evaluate_agent(
         agent,
         env,
-        writer,
         N_eval=int(N_eval * p_start),
         prints=prints,
         agent_start=True,
@@ -99,7 +99,6 @@ def full_eval(
     owins, olosses, oties, oills = evaluate_agent(
         agent,
         env,
-        writer,
         N_eval=int((1 - p_start) * N_eval),
         prints=prints,
         agent_start=False,

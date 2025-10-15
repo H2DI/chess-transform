@@ -5,6 +5,20 @@ import torch
 import chess_seq.models as models
 
 
+def build_and_save_model(model_config):
+    model = models.ChessNet(config=model_config)
+    base_checkpoint = {
+        "model_config": model_config,
+        "model_state_dict": model.state_dict(),
+    }
+    torch.save(base_checkpoint, f"checkpoints/{model_config.name}/bare_model.pth")
+    print(f"New model {model_config.name} built and saved.")
+    print(
+        f"Number of parameters in model: {sum(p.numel() for p in model.parameters())}"
+    )
+    return model
+
+
 def get_latest_checkpoint(model_name, base_name="checkpoint"):
     model_dir = f"checkpoints/{model_name}/"
     pattern = re.compile(base_name + r"_(\d+)\.pth")
@@ -58,9 +72,8 @@ def load_model(model_name, number=None, special_name=None):
     model = models.ChessNet(model_config)
 
     model.load_state_dict(checkpoint["model_state_dict"])
-    encoder = checkpoint["encoder"]
 
     print(f"Loaded model from {checkpoint_path}")
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters in model: {num_params}")
-    return model, encoder, checkpoint
+    return model, model_config, checkpoint

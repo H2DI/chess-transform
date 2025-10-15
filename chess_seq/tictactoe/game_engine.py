@@ -1,13 +1,19 @@
 import numpy as np
 import torch
 import random
+import pickle
 
 import chess_seq.tictactoe.mechanics as mechanics
+from configs import ModelConfig
 
 
 class TTTGameEngine:
-    def __init__(self, model: torch.nn.Module, encoder, device=None):
+    def __init__(self, model_config: ModelConfig, model: torch.nn.Module, device=None):
         self.model = model
+        self.model_config = model_config
+        with open(model_config.encoder_path, "rb") as f:
+            encoder = pickle.load(f)
+
         self.encoder = encoder
         self.device = device if device else next(model.parameters()).device
         self.model.to(self.device)
@@ -23,17 +29,14 @@ class TTTGameEngine:
         outputs a sequence of tokens, regardless of whether this gives a proper
         chess game
         """
-        model = self.model
-        encoder = self.encoder
-        device = self.device
         final_evaluation = False
 
         if sequence is None:
             sequence = torch.tensor(
-                np.array([encoder.transform(["START"])]), device=device
+                np.array([self.encoder.transform(["START"])]), device=self.device
             )
         for _ in range(n_plies):
-            out = model(sequence)  # B, T, vocab_size
+            out = self.model(sequence)  # B, T, vocab_size
             next_move = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
             sequence = torch.cat((sequence, next_move), dim=1)
             if final_evaluation:
