@@ -146,24 +146,19 @@ class PlayVPlay:
     def __init__(self, player1: Player, player2: Player):
         self.player1 = player1
         self.player2 = player2
-        self.games = []
+        self.game = mechanics.TTTBoard()
 
     def _play_one_move(self):
         player = self.player1 if self.game.turn % 2 == 0 else self.player2
         move = player.get_move(self.game)
         assert move is not None, "Player returned an illegal move."
-
         self.game.push(move)
-        print(f"Game state after move:\n{self.game.X - self.game.O}\n")
-        if self.game.is_game_over():
-            print(f"Game over! Winner: {self.game.winner}")
 
     def play_game(self):
-        self.current_game = mechanics.TTTBoard()
-        print("New game started.")
+        self.game = mechanics.TTTBoard()
         while not self.game.is_game_over():
             self._play_one_move()
-        self.games.append(self.game)
+        return self.game
 
 
 class PlayAgainstHuman:

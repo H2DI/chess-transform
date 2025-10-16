@@ -40,7 +40,7 @@ class GRPOConfig:
     rollout_temperature = 1
 
     learning_rate = 1e-4
-    min_lr = 5e-5
+    min_lr = 1e-5
     end_lr_steps = 50000
 
     debug_prints = False

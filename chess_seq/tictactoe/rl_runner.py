@@ -77,8 +77,8 @@ class GRPORunner:
                 prints=True,
                 p_start=self.p_start,
             )
-            if losses == 0 and illegal_moves == 0:
-                self.agent.save_checkpoint(checkpoint_name="no_loss")
-                print("No_loss model saved")
+            if wins == 1:
+                self.agent.save_checkpoint(checkpoint_name="beat")
+                print("Adversary solved")
                 return False
         return True
