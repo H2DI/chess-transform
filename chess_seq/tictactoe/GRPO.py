@@ -217,6 +217,9 @@ class GRPO(TTTAgent):
         log_probs = torch.log_softmax(unn_log_probs, dim=-1)
 
         played_log_probs = self.grab_play_indices(log_probs, prints)  # (G, L, V)
+        if prints:
+            print(f"full log probs \n{log_probs[:, :, -1]}")
+            print(f"played log probs \n{played_log_probs[:, :, -1]}")
 
         return played_log_probs.gather(-1, tokenids.unsqueeze(-1)).squeeze(-1)  # (G, L)
 

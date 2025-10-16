@@ -20,7 +20,7 @@ class ModelConfig:
 class GRPOConfig:
     new_model: bool = False
 
-    model_name: str = "ttt_small_zero"
+    model_name: str = "ttt_large"
     log_dir: str = "logs/rl_training"
     device_str: str = "cpu"
     eval_frequency: int = 1024
@@ -39,8 +39,8 @@ class GRPOConfig:
 
     rollout_temperature = 1
 
-    learning_rate = 1e-3
-    min_lr = 1e-4
+    learning_rate = 1e-4
+    min_lr = 5e-5
     end_lr_steps = 50000
 
     debug_prints = False

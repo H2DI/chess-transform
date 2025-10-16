@@ -58,7 +58,6 @@ class GRPORunner:
             legal_moves = info.get("legal_moves", [])
             done = terminated or truncated
             self.agent.update()
-
         self.agent.end_episode_update(state, reward)
 
     def short_eval(self):
