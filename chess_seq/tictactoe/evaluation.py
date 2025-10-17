@@ -69,7 +69,8 @@ def evaluate_agent(
         print(f"Wins: {wins * 100:.2f}%")
         print(f"Losses: {losses * 100:.2f}%")
         print(f"Ties: {ties * 100:.2f}%")
-        print(f"Illegal moves: {illegal_moves * 100:.2f}%")
+        if log_illegal:
+            print(f"Illegal moves: {illegal_moves * 100:.2f}%")
     return wins, losses, ties, illegal_moves
 
 

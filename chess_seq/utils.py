@@ -11,6 +11,7 @@ def build_and_save_model(model_config):
         "model_config": model_config,
         "model_state_dict": model.state_dict(),
     }
+    os.makedirs(f"checkpoints/{model_config.name}", exist_ok=True)
     torch.save(base_checkpoint, f"checkpoints/{model_config.name}/bare_model.pth")
     print(f"New model {model_config.name} built and saved.")
     print(
