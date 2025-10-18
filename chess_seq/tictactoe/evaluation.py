@@ -6,9 +6,7 @@ from torch import no_grad
 
 
 @no_grad()
-def play_one_game(
-    agent: TTTAgent, env: TTTEnv, agent_start=True, temperature=0.0, mask_illegal=True
-):
+def play_one_game(agent: TTTAgent, env: TTTEnv, agent_start=True, temperature=0.0):
     state, _ = env.reset(agent_start=agent_start)
     agent_id = "X" if agent_start else "O"
     agent.new_game(agent_id)
@@ -82,11 +80,11 @@ def full_eval(
 
     if p_start > 0:
         print("New game as X")
-        play_one_game(agent, env, agent_start=True, temperature=0.0)  # warm up
+        play_one_game(agent, env, agent_start=True, temperature=0.0)
         env.game.print_game()
     if p_start < 1:
         print("New game as O")
-        play_one_game(agent, env, agent_start=False, temperature=0.0)  # warm up
+        play_one_game(agent, env, agent_start=False, temperature=0.0)
         env.game.print_game()
 
     xwins, xlosses, xties, xills = evaluate_agent(

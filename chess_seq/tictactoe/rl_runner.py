@@ -80,5 +80,5 @@ class GRPORunner:
             if wins == 1:
                 self.agent.save_checkpoint(checkpoint_name="beat")
                 print("Adversary solved")
-                return False
+                return False  # Break training here
         return True

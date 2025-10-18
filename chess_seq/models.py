@@ -152,6 +152,7 @@ class ChessNet(nn.Module):
                 for _ in range(config.n_layers)
             ]
         )
+        self.final_ln = nn.LayerNorm(config.k)
         self.l4 = nn.Linear(config.k, config.vocab_size)
 
     def forward(self, x, mask=None):
@@ -159,5 +160,6 @@ class ChessNet(nn.Module):
         r = self.embedder(x)  # (b, T, k)
         for block in self.blocks:
             r = block(r, self.rope, mask=mask)  #  (b, T, k)
+        r = self.final_ln(r)  #  (b, T, k)
         r = self.l4(r)  #  (b, T, k)
         return r
