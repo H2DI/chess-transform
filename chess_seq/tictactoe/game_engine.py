@@ -4,7 +4,7 @@ import random
 import pickle
 
 import chess_seq.tictactoe.mechanics as mechanics
-from configs import ModelConfig
+from config import ModelConfig
 
 
 class TTTGameEngine:

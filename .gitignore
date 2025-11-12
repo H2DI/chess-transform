@@ -175,3 +175,5 @@ synthetic_games/*
 logs/*
 test.py
 configs.py
+/configs
+config.py

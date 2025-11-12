@@ -4,6 +4,7 @@ from chess_seq.tictactoe.players import (
     NNPlayer,
     ReasonablePlayer,
 )
+
 from chess_seq.tictactoe.environment import TTTEnv
 
 from chess_seq.tictactoe.GRPO import GRPO
@@ -13,8 +14,10 @@ from chess_seq.tictactoe.evaluation import full_eval
 from torch.utils.tensorboard import SummaryWriter
 
 import chess_seq.utils as utils
-from configs import GRPOConfig, ModelConfig
+from config import GRPOConfig, ModelConfig
 
+import json
+import sys
 import shutil
 import torch
 import pickle
@@ -22,10 +25,22 @@ import os
 import time
 
 
-if __name__ == "__main__":
-    session_config = GRPOConfig()
+session_config = GRPOConfig()
+if "--config" in sys.argv:
+    path = sys.argv[sys.argv.index("--config") + 1]
+    name = session_config.model_name
+    session_name = session_config.session_name
+    with open(path) as f:
+        updates = json.load(f)
+    for k, v in updates.items():
+        setattr(session_config, k, v)
 
-    writer = SummaryWriter(f"{session_config.log_dir}/{session_config.model_name}")
+
+if __name__ == "__main__":
+    writer = SummaryWriter(
+        f"{session_config.log_dir}/{session_config.model_name}"
+        + f"_{session_config.session_name}"
+    )
     device = torch.device(session_config.device_str)
     if session_config.new_model:
         model_config = ModelConfig(name=session_config.model_name)

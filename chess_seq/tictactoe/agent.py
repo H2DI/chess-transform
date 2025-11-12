@@ -6,7 +6,7 @@ from chess_seq.tictactoe import mechanics
 from chess_seq.tictactoe.game_engine import TTTGameEngine
 from chess_seq.tictactoe.mechanics import TTTBoard
 from torch import no_grad
-from configs import ModelConfig
+from config import ModelConfig
 
 
 class TTTAgent:

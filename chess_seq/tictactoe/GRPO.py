@@ -12,7 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 import chess_seq.tictactoe.mechanics as mechanics
 from chess_seq.tictactoe.agent import TTTAgent
 from chess_seq.utils import clone_model
-from configs import GRPOConfig, ModelConfig
+from config import GRPOConfig, ModelConfig
 
 
 class GRPO(TTTAgent):
@@ -211,9 +211,7 @@ class GRPO(TTTAgent):
         prints=False,
     ):
         """ """
-        T = sequence.shape[1]
-        causal_mask = torch.tril(torch.ones(T, T), diagonal=0).to(self.device).bool()
-        unn_log_probs = model(sequence, mask=causal_mask)  # G, T, V
+        unn_log_probs = model(sequence)  # G, T, V
         log_probs = torch.log_softmax(unn_log_probs, dim=-1)
 
         played_log_probs = self.grab_play_indices(log_probs, prints)  # (G, L, V)

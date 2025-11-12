@@ -189,10 +189,7 @@ class ChessTrainerRunner:
         input_seq = seq[:, :-1]
         target = seq[:, 1:]
 
-        b, T = seq.shape
-
-        tgt_mask = torch.tril(torch.ones(T - 1, T - 1)).to(self.device).bool()
-        logits = self.model(input_seq, mask=tgt_mask)
+        logits = self.model(input_seq)
         loss = self.criterion(logits.view(-1, logits.size(-1)), target.reshape(-1))
         return loss, logits
 

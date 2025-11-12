@@ -1,4 +1,4 @@
-from configs import TrainingSession
+from config import TrainingSession
 from chess_seq.training.trainer_runner import ChessTrainerRunner
 
 from chess_seq.training.generate_runs import generate_runs

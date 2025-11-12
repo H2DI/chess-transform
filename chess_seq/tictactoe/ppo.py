@@ -9,7 +9,7 @@ from chess_seq.tictactoe.mechanics import TTTBoard
 from chess_seq.tictactoe.reinforce import REINFORCE
 
 
-class PPO(REINFORCE):
+class PPO:
     """
     WIP
     """
@@ -26,7 +26,9 @@ class PPO(REINFORCE):
         lambda_=0.95,
         writer=None,
     ):
-        super().__init__(actor, encoder)
+        super().__init__()
+
+        self.actor = actor
         self.critic = critic
         self.gamma = gamma
         self.lambda_ = lambda_
@@ -90,11 +92,6 @@ class PPO(REINFORCE):
 
         clipped_ratio = torch.clamp(ratio, min=1 - self.eps, max=1 + self.eps)
         ppo_clip_obj = torch.min(ratio * GAEs, clipped_ratio * GAEs)
-
-        # if self.writer:
-        #     probs = torch.softmax(logits, dim=-1)
-        #     entropy = -(probs * log_probs).sum(dim=1).mean()
-        #     self.writer.add_scalar("policy/entropy", entropy.item(), self.n_eps)
 
         return ppo_clip_obj.sum().unsqueeze(0)
 
