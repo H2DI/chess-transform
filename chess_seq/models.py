@@ -11,12 +11,13 @@ from typing import List
 @dataclass
 class ModelConfig:
     name: str = "Default"
-    vocab_size: int = 71
+    vocab_size: int = 71  # 151_936
     block_size: int = 512
-    n_head: int = 4
-    n_layers: int = 4
-    dropout: int = 0.1
-    k: int = 64  # k needs to be divisible by n_head
+    n_head: int = 16
+    n_layers: int = 28
+    dropout: int = 0.0
+    kv_groups: int = 2
+    k: int = 1024  # k needs to be divisible by n_head
 
     special_freqs: List[float] = None
     encoder_path: str = "data/move_encoder.pkl"
@@ -58,6 +59,57 @@ class ModelConfig:
 #         return self.unifyheads(heads_output.reshape(b, N, k))
 
 
+# class AttentionRope(nn.Module):
+#     def __init__(self, k, heads, dropout=0.1):
+#         super().__init__()
+#         self.heads = heads
+#         self.head_dim = k // heads
+#         self.qkv = nn.Linear(k, 3 * k, bias=False)
+#         self.out = nn.Linear(k, k)
+
+#         self.dropout_p = dropout
+
+#     def forward(self, x, rope, is_causal=True):
+#         b, T, k = x.shape
+#         qkv = self.qkv(x).reshape(b, T, self.heads, 3, self.head_dim)
+#         Q, K, V = qkv.unbind(dim=3)  # b, T, h, dh
+
+#         Q = Q.transpose(1, 2)  # b, h, t, dh
+#         K = K.transpose(1, 2)
+#         V = V.transpose(1, 2)
+
+#         Q, K = rope(Q), rope(K)
+#         out = F.scaled_dot_product_attention(
+#             Q,
+#             K,
+#             V,
+#             attn_mask=None,
+#             dropout_p=self.dropout_p if self.training else 0.0,
+#             is_causal=is_causal,
+#         )  # b, h, t, dh
+
+#         out = out.transpose(1, 2).reshape(b, T, k)
+#         return self.out(out)
+
+# class TransformerBlock(nn.Module):
+#     def __init__(self, k, heads, dropout=0.1):
+#         super().__init__()
+
+#         self.attention = AttentionRope(k, heads, dropout=dropout)
+
+#         self.norm1 = nn.LayerNorm(k)
+#         self.norm2 = nn.LayerNorm(k)
+
+#         self.ff = nn.Sequential(nn.Linear(k, 4 * k), nn.GELU(), nn.Linear(4 * k, k))
+
+#     def forward(self, x, rope, is_causal=True):
+#         # pre-norm
+#         x = self.norm1(x)
+#         x = x + self.attention(x, rope, is_causal=is_causal)  # dropout included
+#         x = self.norm2(x)
+#         return x + self.ff(x)
+
+
 class RoPE(nn.Module):
     def __init__(self, d_model, block_size, special_freqs=None):
         super().__init__()
@@ -74,7 +126,7 @@ class RoPE(nn.Module):
         ).unsqueeze(0)  # 1, k // 2
 
         for i, freq in enumerate(special_freqs):
-            inv_freq[0, -i] = freq
+            inv_freq[0, -i - 1] = freq
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
         angles = self._get_angles(block_size)  # block_size, k //2
@@ -83,18 +135,19 @@ class RoPE(nn.Module):
         self.register_buffer("sin", torch.sin(angles), persistent=False)
 
     def forward(self, x):
-        b, h, N, k = x.shape
-        x_reshaped = x.view(b, h, N, k // 2, 2)
+        b, h, T, k = x.shape
+        assert k % 2 == 0, f"Expected even embedding dim, got {k}"
+        x_reshaped = x.view(b, h, T, k // 2, 2)
         x1 = x_reshaped[..., 0]
         x2 = x_reshaped[..., 1]
-        if N <= self.block_size:
-            cos = self.cos[:N].unsqueeze(0).unsqueeze(0)
-            sin = self.sin[:N].unsqueeze(0).unsqueeze(0)
+        if T <= self.block_size:
+            cos = self.cos[:T].unsqueeze(0).unsqueeze(0)
+            sin = self.sin[:T].unsqueeze(0).unsqueeze(0)
         else:
-            cos, sin = self._recompute_cossin(N, x.device)
+            cos, sin = self._recompute_cossin(T, x.device)
 
         rotated = torch.stack([x1 * cos + x2 * sin, -x1 * sin + x2 * cos], dim=-1)
-        return rotated.reshape(b, h, N, k)
+        return rotated.reshape(b, h, T, k)
 
     def _get_angles(self, N, device=None):
         positions = torch.arange(N, dtype=torch.float32, device=device).unsqueeze(1)
@@ -106,26 +159,35 @@ class RoPE(nn.Module):
         return torch.cos(angles), torch.sin(angles)
 
 
-class AttentionRope(nn.Module):
-    def __init__(self, k, heads, dropout=0.1):
+class GQARope(nn.Module):
+    def __init__(self, k, heads=16, groups=2, dropout=0.0):
         super().__init__()
         self.heads = heads
+        self.groups = groups
         self.head_dim = k // heads
-        self.qkv = nn.Linear(k, 3 * k, bias=False)
-        self.out = nn.Linear(k, k)
+
+        self.qkv = nn.Linear(k, k + 2 * k // groups, bias=False)
+
+        self.unify_heads = nn.Linear(k, k)
 
         self.dropout_p = dropout
 
     def forward(self, x, rope, is_causal=True):
         b, T, k = x.shape
-        qkv = self.qkv(x).reshape(b, T, self.heads, 3, self.head_dim)
-        Q, K, V = qkv.unbind(dim=3)  # b, T, h, dh
+        h, groups = self.heads, self.groups
+        hg = h // groups
+        kh = k // h
+
+        Q, K, V = torch.split(self.qkv(x), [k, k // groups, k // groups], dim=-1)
+
+        Q = Q.view(b, T, h, kh).transpose(1, 2)
+        K = K.reshape(b, T, hg, kh).transpose(1, 2)
+        V = V.reshape(b, T, hg, kh).transpose(1, 2)
+
+        K = K.unsqueeze(2).expand(b, hg, groups, T, kh).reshape(b, h, T, kh)
+        V = V.unsqueeze(2).expand(b, hg, groups, T, kh).reshape(b, h, T, kh)
 
         Q, K = rope(Q), rope(K)
-
-        Q = Q.transpose(1, 2)  # b, h, t, dh
-        K = K.transpose(1, 2)
-        V = V.transpose(1, 2)
 
         out = F.scaled_dot_product_attention(
             Q,
@@ -137,30 +199,37 @@ class AttentionRope(nn.Module):
         )  # b, h, t, dh
 
         out = out.transpose(1, 2).reshape(b, T, k)
-        return self.out(out)
+        return self.unify_heads(out)
 
 
-class TransformerBlock(nn.Module):
-    def __init__(self, k, heads, dropout=0.1):
+class SwiGLU(nn.Module):
+    # Replace MLP in Transformer block
+
+    def __init__(self, dim, hidden_dim=None, bias=False):
         super().__init__()
+        hidden_dim = hidden_dim or 4 * dim
+        self.w1 = nn.Linear(dim, hidden_dim, bias=bias)  # value path
+        self.w2 = nn.Linear(dim, hidden_dim, bias=bias)  # gate path
+        self.w3 = nn.Linear(hidden_dim, dim, bias=bias)  # projection back to model dim
 
-        self.attention = AttentionRope(k, heads, dropout=dropout)
+    def forward(self, x):
+        return self.w3(self.w1(x) * F.silu(self.w2(x)))
 
-        self.dropout = torch.nn.Dropout(p=dropout)
 
-        self.norm1 = nn.LayerNorm(k)
-        self.norm2 = nn.LayerNorm(k)
-
-        self.ff = nn.Sequential(nn.Linear(k, 4 * k), nn.GELU(), nn.Linear(4 * k, k))
+class ParallelBlock(nn.Module):
+    def __init__(self, dim, n_heads, groups, dropout=0.0):
+        super().__init__()
+        self.norm = nn.RMSNorm(dim)
+        self.attn = GQARope(dim, n_heads, groups, dropout=dropout)
+        self.ff = SwiGLU(dim, hidden_dim=4 * dim)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, rope, is_causal=True):
-        # pre-norm
-        x = self.norm1(x)
-        x = x + self.attention(x, rope, is_causal=is_causal)  # dropout included
-
-        x = self.norm2(x)
-        result = x + self.dropout(self.ff(x))
-        return result
+        # Parallel residuals, no dropout
+        h = self.norm(x)
+        attn_out = self.attn(h, rope, is_causal=is_causal)
+        ff_out = self.ff(h)
+        return x + self.dropout(attn_out + ff_out)
 
 
 class ChessNet(nn.Module):
@@ -180,12 +249,15 @@ class ChessNet(nn.Module):
         )
         self.blocks = nn.ModuleList(
             [
-                TransformerBlock(config.k, config.n_head, dropout=config.dropout)
+                ParallelBlock(
+                    config.k, config.n_head, config.kv_groups, dropout=config.dropout
+                )
                 for _ in range(config.n_layers)
             ]
         )
         self.final_ln = nn.LayerNorm(config.k)
-        self.l4 = nn.Linear(config.k, config.vocab_size)
+        self.l4 = nn.Linear(config.k, config.vocab_size + 1, bias=False)
+        self.l4.weight = self.embedder.weight
 
     def forward(self, x):
         # x:  b, T
@@ -195,3 +267,55 @@ class ChessNet(nn.Module):
         r = self.final_ln(r)  #  (b, T, k)
         r = self.l4(r)  #  (b, T, k)
         return r
+
+
+if __name__ == "__main__":
+    torch.manual_seed(0)
+    device = torch.device("mps")
+
+    # # smaller config for a quick test
+    # cfg = ModelConfig(
+    #     name="test",
+    #     vocab_size=71,
+    #     block_size=64,
+    #     n_head=8,
+    #     n_layers=2,
+    #     dropout=0.0,
+    #     kv_groups=2,
+    #     k=128,
+    # )
+
+    cfg = ModelConfig()
+
+    model = ChessNet(cfg).to(device)
+    model.eval()
+
+    batch_size = 4
+    seq_len = 16
+
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"total params = {total_params:,}")
+    print(f"trainable params = {trainable_params:,}")
+
+    import torch.optim as optim
+
+    # random input tokens in [0, vocab_size-1]
+    x = torch.randint(0, cfg.vocab_size, (batch_size, seq_len), dtype=torch.long).to(
+        device
+    )
+    opt = optim.Adam(model.parameters(), lr=1e-4)
+
+    opt.zero_grad()
+    logits = model(x)  # (batch_size, seq_len, vocab_size)
+    print("logits.shape =", logits.shape)
+
+    # quick loss check
+    targets = torch.randint(
+        0, cfg.vocab_size, (batch_size, seq_len), dtype=torch.long
+    ).to(device)
+    loss_fn = nn.CrossEntropyLoss().to(device)
+    loss = loss_fn(logits.view(-1, cfg.vocab_size + 1), targets.view(-1))
+    loss.backward()
+    opt.step()
+    print("loss =", loss.item())

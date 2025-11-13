@@ -8,4 +8,4 @@ TODO:
 - replace with builtin self attention
 
 Chess:
-- 
+- change encoding

@@ -26,7 +26,7 @@ if __name__ == "__main__":
             json.dump(params, f)
 
         subprocess.Popen(
-            ["python", "-u", "rl_train.py", "--config", config_path],
+            ["python", "-u", "ttt_rl_train.py", "--config", config_path],
             stdout=open(f"logs/run_{i}.out", "w"),
             stderr=open(f"logs/run_{i}.err", "w"),
         )
