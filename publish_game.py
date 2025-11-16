@@ -2,7 +2,7 @@ import json
 import requests
 import torch
 
-from chess_seq.evaluation.game_engine import ChessGameEngine
+from chess_seq.game_engine import ChessGameEngine
 import chess_seq.utils as utils
 import chess
 

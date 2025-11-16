@@ -3,13 +3,7 @@ import torch
 import random
 import chess
 
-from chess_seq.chess_utils.chess_utils import (
-    move_to_tokens,
-    board_to_sequence,
-    board_to_pgn,
-    tokens_to_move,
-    InvalidMove,
-)
+from chess_seq.encoder import InvalidMove
 
 
 class ChessGameEngine:
@@ -18,7 +12,8 @@ class ChessGameEngine:
         self.encoder = encoder
         self.device = device if device else next(model.parameters()).device
 
-        self.end_token = np.array(encoder.transform(["END"]))
+        self.start_token_id = self.encoder.start_token_id
+        self.end_token_id = self.encoder.end_token_id
 
     @torch.no_grad()
     def generate_sequence(self, sequence=None, n_plies=30):
@@ -27,18 +22,15 @@ class ChessGameEngine:
         chess game
         """
         model = self.model
-        encoder = self.encoder
         device = self.device
 
         if sequence is None:
-            sequence = torch.tensor(
-                np.array([encoder.transform(["START"])]), device=device
-            )
-        for _ in range(3 * n_plies):
+            sequence = torch.tensor(np.array([self.start_token_id]), device=device)
+        for _ in range(n_plies):
             out = model(sequence)  # B, T, vocab_size
-            next_move = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
-            sequence = torch.cat((sequence, next_move), dim=1)
-            if sequence[0, -1].cpu().numpy() == self.end_token:
+            next_id = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
+            sequence = torch.cat((sequence, next_id), dim=1)
+            if sequence[0, -1].cpu().numpy() == self.end_token_id:
                 break
         return sequence.squeeze(0).cpu().numpy()
 
@@ -53,15 +45,15 @@ class ChessGameEngine:
         encoder = self.encoder
         if game is None:
             game = chess.Board()
-            sequence = torch.tensor(
-                np.array([encoder.transform(["START"])]), device=device
-            )
+            sequence = torch.tensor(np.array([[self.start_token_id]]), device=device)
         else:
-            sequence = board_to_sequence(game, encoder, end=False)
+            sequence = encoder.board_to_sequence(game, end=False)
             sequence = torch.tensor(np.array([sequence]), device=device)
 
         if record_pgn:
-            pgn_game = board_to_pgn(game) if game is not None else chess.pgn.Game()
+            pgn_game = (
+                encoder.board_to_pgn(game) if game is not None else chess.pgn.Game()
+            )
             node = pgn_game.end()
             del pgn_game.headers["Date"]
             del pgn_game.headers["Result"]
@@ -73,20 +65,17 @@ class ChessGameEngine:
         bad_plies = []
 
         for _ in range(n_plies):
-            tokens, candidate_sequence, ended = self._generate_next_tokens(
-                sequence, greedy=greedy
-            )
+            token_id, ended = self._generate_next_token_id(sequence, greedy=greedy)
             if ended:
                 break
             current_ply += 1
             game, node, bad_plies, sequence = self._play_move_or_fallback(
-                tokens,
+                token_id,
                 game,
                 node,
                 bad_plies,
                 current_ply,
                 sequence,
-                candidate_sequence,
                 record_pgn,
             )
 
@@ -94,79 +83,64 @@ class ChessGameEngine:
                 break
         return game, pgn_game, bad_plies
 
-    def _generate_next_tokens(self, sequence, greedy=True, no_end=True):
-        tokens = []
-        candidate_sequence = sequence.clone()
-        for _ in range(3):
-            out = self.model(candidate_sequence)  # B, T, vocab_size
-            if greedy:
-                next_token = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
-            else:
-                logits = out[0, -1]
-                if no_end:
-                    logits[0] = float("-inf")
-                dist = torch.distributions.Categorical(logits=logits)
-                next_token = dist.sample().unsqueeze(0).unsqueeze(0)
-            tokens.append(next_token.item())
-            candidate_sequence = torch.cat((candidate_sequence, next_token), dim=1)
-            if (
-                not (no_end)
-                and candidate_sequence[0, -1].cpu().numpy() == self.end_token
-            ):
-                return tokens, candidate_sequence, True
-        return tokens, candidate_sequence, False
+    def _generate_next_token_id(self, sequence, greedy=True, no_end=True):
+        out = self.model(sequence)  # B, T, vocab_size
+        if greedy:
+            next_token_id = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
+        else:
+            logits = out[0, -1]
+            if no_end:
+                logits[0] = float("-inf")
+            dist = torch.distributions.Categorical(logits=logits)
+            next_token_id = dist.sample().unsqueeze(0).unsqueeze(0)
+        return next_token_id, False
 
     def _play_move_or_fallback(
         self,
-        tokens,
+        token_id,
         game,
         node,
         bad_plies,
         current_ply,
         sequence,
-        candidate_sequence,
         record_pgn,
     ):
         """
         Updates the game, pgn, node *and* the puts the tokens of the random move
         actually played in the sequence
         """
-        game, node, legal, true_move_played = self._play_from_tokens(
-            tokens, game, node, record_pgn
+        game, node, played_proposed_move, true_move_played = self._play_from_token(
+            token_id, game, node, record_pgn
         )
 
-        if not legal:
+        if not played_proposed_move:
             bad_plies.append(current_ply)
-            tokens = np.array(
-                [self.encoder.transform(move_to_tokens(true_move_played))]
-            )
-            sequence = torch.cat(
-                (sequence, torch.tensor(tokens, device=self.device)),
-                dim=1,
-            )
-        else:
-            sequence = candidate_sequence
+            token_id = np.array([[self.encoder.move_to_id(true_move_played)]])
+
+        sequence = torch.cat(
+            (sequence, torch.tensor(token_id, device=self.device)),
+            dim=1,
+        )
         return game, node, bad_plies, sequence
 
     @torch.no_grad()
-    def _play_from_tokens(self, tokens, game, node, record_pgn):
+    def _play_from_token(self, token_id, game, node, record_pgn):
         """
-        Takes the three tokens and:
+        Takes the token and:
         - plays the move if it is valid
         - plays a random move otherwise
         Returns also a boolean saying if the move was legal
         """
-        full_move = self.encoder.inverse_transform(
-            tokens
-        )  # list of 3 strings (from, to, promo)
+        full_move = self.encoder.inverse_transform(token_id)
         full_move = "".join(full_move)
         try:
-            chess_move = tokens_to_move(full_move)
+            chess_move = self.encoder.token_to_move(full_move)
             if chess_move in game.legal_moves:
                 game.push(chess_move)
                 if record_pgn and node is not None:
                     node = node.add_variation(chess_move)
-                return game, node, True, chess_move
+                played_proposed_move = True
+                return game, node, played_proposed_move, chess_move
             else:
                 raise InvalidMove(f"{chess_move} is illegal")
         except InvalidMove as e:
@@ -177,4 +151,5 @@ class ChessGameEngine:
                 node = node.add_variation(random_move)
                 node.nags.add(chess.pgn.NAG_BLUNDER)
                 node.comment = f"{e}. Played random move."
-            return game, node, False, random_move
+            played_proposed_move = False
+            return game, node, played_proposed_move, random_move

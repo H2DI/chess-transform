@@ -1,4 +1,4 @@
-from config import TrainingSession, TrainingConfig, ModelConfig
+from configs import TrainingSession, TrainingConfig, ModelConfig
 from chess_seq.training.trainer_runner import ChessTrainerRunner
 
 

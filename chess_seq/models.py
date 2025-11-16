@@ -18,8 +18,8 @@ class ModelConfig:
     dropout: int = 0.0
     kv_groups: int = 2
     k: int = 1024  # k needs to be divisible by n_head
-
     special_freqs: List[float] = None
+
     encoder_path: str = "data/move_encoder.pkl"
 
 

@@ -35,15 +35,11 @@ class ChessTrainerRunner:
             log_dir=f"runs/chess_transformer_experiment/{self.model_config.name}"
         )
 
-        self.data_format = self.config.data_format
         self.n_steps = self.training_state["n_steps"]
         self.n_games = self.training_state["n_games"]
-        if self.config.restart:
-            self.epoch = 0
-            self.file_number = 0
-        else:
-            self.epoch = self.training_state["epoch"]
-            self.file_number = self.training_state["file_number"]
+
+        self.epoch = self.training_state["epoch"]
+        self.file_number = self.training_state["file_number"]
 
         self.criterion = torch.nn.CrossEntropyLoss(
             ignore_index=self.model_config.vocab_size
@@ -100,11 +96,8 @@ class ChessTrainerRunner:
     def train(self, skip_seen_files=True):
         train_folder = self.config.data_folder
         print(f"{train_folder=}")
-        print(f"{self.data_format=}")
         train_files = [
-            train_folder + f
-            for f in os.listdir(train_folder)
-            if f.endswith(f".{self.data_format}")
+            train_folder + f for f in os.listdir(train_folder) if f.endswith(".npz")
         ]
         for epoch in range(self.config.num_epochs - self.epoch):
             for file_id, train_file in enumerate(train_files):
@@ -124,7 +117,6 @@ class ChessTrainerRunner:
             batch_size=self.training_config.batch_size,
             device=self.device,
             padding_value=self.model_config.vocab_size,
-            data_format=self.config.data_format,
         )
 
         self._count_lines(train_file)
@@ -135,6 +127,7 @@ class ChessTrainerRunner:
             self.n_steps += 1
             self.n_games += self.training_config.batch_size
 
+            self.optimizer.zero_grad()
             loss, logits = self._train_step(seq)
 
             with torch.no_grad():
@@ -143,7 +136,6 @@ class ChessTrainerRunner:
                     "LR", self.scheduler.get_last_lr()[0], self.n_steps
                 )
 
-            self.optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
 
@@ -163,13 +155,9 @@ class ChessTrainerRunner:
         self._evaluate_model()
 
     def _count_lines(self, train_file):
-        if self.data_format == "npz":
-            with open(train_file, "rb") as f:
-                data = np.load(f)
-                num_lines = len(data)
-        elif self.data_format == "csv":
-            with open(train_file, "r") as f:
-                num_lines = sum(1 for _ in f)
+        with open(train_file, "rb") as f:
+            data = np.load(f)
+            num_lines = len(data)
         print(f"Number of games in training file: {num_lines}")
 
     def _evaluate_model(self):

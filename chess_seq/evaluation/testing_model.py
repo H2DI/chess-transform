@@ -2,7 +2,7 @@ import torch
 import chess
 
 from chess_seq.training.trainer import log_stat_group
-from chess_seq.evaluation.game_engine import ChessGameEngine
+from chess_seq.game_engine import ChessGameEngine
 
 
 @torch.no_grad()
