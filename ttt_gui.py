@@ -88,7 +88,6 @@ class TTTGui:
 
 
 if __name__ == "__main__":
-    # If these lines block or crash, you'll now get a dialog/traceback
     model, encoder, checkpoint = utils.load_model(
         "ttt_large_573440_GRPO", special_name="no_loss"
     )

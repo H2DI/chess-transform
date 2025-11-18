@@ -11,7 +11,7 @@ from typing import List
 @dataclass
 class ModelConfig:
     name: str = "Default"
-    vocab_size: int = 71  # 151_936
+    vocab_size: int = 4610  # 151_936: Qwen
     block_size: int = 512
     n_head: int = 16
     n_layers: int = 28

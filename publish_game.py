@@ -6,13 +6,13 @@ from chess_seq.game_engine import ChessGameEngine
 import chess_seq.utils as utils
 import chess
 
-import config
+import configs
 
 
 with open("private_token.json") as f:
     token = json.load(f)["lichessApiToken"]
 
-config = config.ModelConfig()
+config = configs.ModelConfig()
 model_name = config.name
 
 study_id = "ZB0upGx"

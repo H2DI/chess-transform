@@ -1,8 +1,11 @@
 import chess.pgn
+import argparse
 import os
 
-from chess_seq.encoder import MoveEncoder
 import numpy as np
+
+from chess_seq.encoder import MoveEncoder
+import chess_seq.data.preprocessing as preprocessing
 
 
 def save_shard(shard_path, game_ids, tokens):
@@ -73,3 +76,18 @@ def run_through_folder(input_folder, output_folder, encoder):
         )
 
     print(f"Done. Total games: {global_game_id}, total shards: {shard_idx}")
+
+
+if __name__ == "__main__":
+    encoder = MoveEncoder()
+    encoder.load("data/move_encoder.pkl")
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pgn_in", type=str, default="")
+    parser.add_argument("--npz_out", type=str, default="")
+    args = parser.parse_args()
+
+    input_folder = args.pgn_in
+    output_folder = args.npz_out
+
+    preprocessing.run_through_folder(input_folder, output_folder, encoder)
