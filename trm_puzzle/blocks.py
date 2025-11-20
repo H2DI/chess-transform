@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from chess_seq.models import GQARope, RoPE
+
 
 class RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
@@ -23,30 +25,47 @@ class SwiGLU(nn.Module):
         return F.silu(x2) * x1
 
 
-class TinyMLPBlock(nn.Module):
-    """
-    2-layer MLP block with:
-      - RMSNorm
-      - SwiGLU
-      - No bias in Linear (as in PaLM / TRM codebase)
-      - Residual connection
-    """
+class TinyAttentionBlock(nn.Module):
+    def __init__(self, dim: int, hidden_mult: int = 4, heads: int = 2):
+        super().__init__()
+        inner_dim = dim * hidden_mult
+        self.norm1 = RMSNorm(dim)
+        self.rope = RoPE(dim, 200)
+        self.fc1 = GQARope(dim, heads=heads, groups=1)
+        self.norm2 = RMSNorm(dim)
+        self.fc2 = nn.Sequential(
+            nn.Linear(dim, 2 * inner_dim, bias=False),
+            SwiGLU(),
+            nn.Linear(inner_dim, dim, bias=False),
+        )
 
+    def forward(self, x):
+        # x: (B, T,  D)
+        h = self.norm1(x + self.fc1(x, self.rope))
+        return self.norm2(h + self.fc2(h))
+
+
+class TinyMLPBlock(nn.Module):
     def __init__(self, dim: int, hidden_mult: int = 4):
         super().__init__()
         inner_dim = dim * hidden_mult
-        self.norm = RMSNorm(dim)
-        self.fc1 = nn.Linear(dim, 2 * inner_dim, bias=False)
-        self.act = SwiGLU()
-        self.fc2 = nn.Linear(inner_dim, dim, bias=False)
+        self.norm1 = RMSNorm(dim)
+        self.fc1 = nn.Sequential(
+            nn.Linear(dim, 2 * inner_dim, bias=False),
+            SwiGLU(),
+            nn.Linear(inner_dim, dim, bias=False),
+        )
+        self.norm2 = RMSNorm(dim)
+        self.fc2 = nn.Sequential(
+            nn.Linear(dim, 2 * inner_dim, bias=False),
+            SwiGLU(),
+            nn.Linear(inner_dim, dim, bias=False),
+        )
 
     def forward(self, x):
-        # x: (B, D)
-        h = self.norm(x)
-        h = self.fc1(h)
-        h = self.act(h)
-        h = self.fc2(h)
-        return x + h
+        # x: B, D
+        h = self.norm1(x + self.fc1(x))
+        return self.norm2(h + self.fc2(h))
 
 
 class ReasoningNet(nn.Module):

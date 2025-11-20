@@ -2,6 +2,7 @@ import time
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+import logging
 
 from trm_puzzle.dataset import ChessTRMDataset
 from trm_puzzle.core import TinyRecursiveChessModel
@@ -22,6 +23,23 @@ def run_overfit(
     data_path = "trm_puzzle/data/mate_in_1.npz"
     ds = ChessTRMDataset(data_path)
 
+    move_encoder = MoveEncoder()
+    move_encoder.load("data/move_encoder.pkl")
+    num_moves = move_encoder.id_to_token.__len__()
+
+    logger = logging.getLogger(__name__)
+    if not logger.handlers:
+        logging.basicConfig(
+            level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+        )
+    logger.info(
+        "Loaded dataset %s: X.shape=%s X.max=%s num_moves=%d",
+        data_path,
+        ds.X.shape,
+        int(ds.X.max()),
+        num_moves,
+    )
+
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
     it = iter(loader)
     train_x, train_y = next(it)
@@ -34,11 +52,15 @@ def run_overfit(
     test_x = test_x.to(device)
     test_y = test_y.to(device)
 
-    move_encoder = MoveEncoder()
-    move_encoder.load("data/move_encoder.pkl")
-    num_moves = move_encoder.id_to_token.__len__()
+    logger.info(
+        "Train batch: x=%s y=%s; Test batch: x=%s y=%s",
+        tuple(train_x.shape),
+        tuple(train_y.shape),
+        tuple(test_x.shape),
+        tuple(test_y.shape),
+    )
 
-    print(f"{int(ds.X.max()) + 1=}")
+    logger.info("token_vocab_size=%d", int(ds.X.max()) + 1)
 
     model = TinyRecursiveChessModel(
         token_vocab_size=int(ds.X.max()) + 1,
@@ -49,6 +71,14 @@ def run_overfit(
     ).to(device)
 
     optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
+
+    emb_size = model.token_emb.num_embeddings
+    logger.info(
+        "Created model on %s: token_emb=%s head_out=%d",
+        device,
+        emb_size,
+        model.head.out_features,
+    )
 
     start = time.time()
     last_train_loss = float("inf")
@@ -76,17 +106,26 @@ def run_overfit(
 
         if epoch % print_every == 0 or train_loss <= target_loss:
             elapsed = time.time() - start
-            print(
-                f"epoch={epoch:4d} train_loss={train_loss:.6f} test_loss={test_loss:.6f} test_acc={test_acc:.4f} elapsed={elapsed:.1f}s"
+            logger.info(
+                "epoch=%d train_loss=%.6f test_loss=%.6f test_acc=%.4f elapsed=%.1fs",
+                epoch,
+                train_loss,
+                test_loss,
+                test_acc,
+                elapsed,
             )
 
         if train_loss <= target_loss:
-            print(f"Reached train_loss={train_loss:.6f} at epoch {epoch}")
+            logger.info("Reached train_loss=%.6f at epoch %d", train_loss, epoch)
             break
 
     total_time = time.time() - start
-    print(
-        f"Finished. Time: {total_time:.1f}s, final_train_loss={last_train_loss:.6f}, final_test_loss={last_test_loss:.6f}, final_test_acc={test_acc:.4f}"
+    logger.info(
+        "Finished. Time: %.1fs, final_train_loss=%.6f, final_test_loss=%.6f, final_test_acc=%.4f",
+        total_time,
+        last_train_loss,
+        last_test_loss,
+        test_acc,
     )
 
 

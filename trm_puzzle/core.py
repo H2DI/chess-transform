@@ -64,26 +64,9 @@ class TinyRecursiveChessModel(nn.Module):
         self.head = nn.Linear(dim, num_moves, bias=False)
 
     # ------------------------
-    # Embedding of x (position)
-    # ------------------------
-    def embed_x(self, x_tokens: torch.Tensor) -> torch.Tensor:
-        """
-        x_tokens: (B, seq_len) with values in [0, token_vocab_size)
-        returns x_emb: (B, D)
-        """
-        B, T = x_tokens.shape
-        assert T == self.seq_len, f"Expected seq_len={self.seq_len}, got {T}"
-
-        tok = self.token_emb(x_tokens)  # (B, T, D)
-        pos = self.pos_emb.unsqueeze(0)  # (1, T, D)
-        h = tok + pos
-        x_emb = h.mean(dim=1)  # mean-pool -> (B, D)
-        return x_emb
-
-    # ------------------------
     # Forward
     # ------------------------
-    def forward(self, x_tokens: torch.Tensor, return_all_steps: bool = False):
+    def forward(self, x: torch.Tensor, return_all_steps: bool = False):
         """
         x_tokens: (B, 69)
 
@@ -92,10 +75,10 @@ class TinyRecursiveChessModel(nn.Module):
         else:
             returns logits_final: (B, num_moves)
         """
-        device = x_tokens.device
-        B = x_tokens.size(0)
+        device = x.device
+        B = x.size(0)
 
-        x_emb = self.embed_x(x_tokens)  # (B, D)
+        x_emb = self.token_emb(x)  # (B, T, D)
 
         # init y and z
         y = self.y0.unsqueeze(0).expand(B, -1)  # (B, D)

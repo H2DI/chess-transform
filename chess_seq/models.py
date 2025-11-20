@@ -172,23 +172,28 @@ class GQARope(nn.Module):
 
         self.dropout_p = dropout
 
-    def forward(self, x, rope, is_causal=True):
+    def forward(self, x, rope=None, is_causal=True):
         b, T, k = x.shape
         h, groups = self.heads, self.groups
-        hg = h // groups
-        kh = k // h
+        hg = h // groups  # kv_heads = h / g
+        kh = k // h  # head_dim = k / h
 
+        # Q: b, T, k
+        # K, V: b, T, k/g
         Q, K, V = torch.split(self.qkv(x), [k, k // groups, k // groups], dim=-1)
 
+        # Q: b, h, T, k/h
         Q = Q.view(b, T, h, kh).transpose(1, 2)
+        # K, V: b, h/g, T, k/h
         K = K.reshape(b, T, hg, kh).transpose(1, 2)
         V = V.reshape(b, T, hg, kh).transpose(1, 2)
 
-        K = K.unsqueeze(2).expand(b, hg, groups, T, kh).reshape(b, h, T, kh)
-        V = V.unsqueeze(2).expand(b, hg, groups, T, kh).reshape(b, h, T, kh)
+        # Q: b, h, T, k/h
+        # K: b, h/g, T, k/h (Applied efficiently to fewer heads)
+        if rope is not None:
+            Q, K = rope(Q), rope(K)
 
-        Q, K = rope(Q), rope(K)
-
+        # Implicit broadcasting: K/V (h/g heads) match Q (h heads)
         out = F.scaled_dot_product_attention(
             Q,
             K,
@@ -196,13 +201,14 @@ class GQARope(nn.Module):
             attn_mask=None,
             dropout_p=self.dropout_p if self.training else 0.0,
             is_causal=is_causal,
-        )  # b, h, t, dh
+        )
 
+        # out: b, T, k
         out = out.transpose(1, 2).reshape(b, T, k)
         return self.unify_heads(out)
 
 
-class SwiGLU(nn.Module):
+class SwiGLUBlock(nn.Module):
     # Replace MLP in Transformer block
 
     def __init__(self, dim, hidden_dim=None, bias=False):
@@ -216,12 +222,28 @@ class SwiGLU(nn.Module):
         return self.w3(self.w1(x) * F.silu(self.w2(x)))
 
 
+class AttentionBlock:
+    def __init__(self, dim, n_heads, groups, dropout=0.0):
+        super().__init__()
+        self.no = nn.RMSNorm(dim)
+        self.attn = GQARope(dim, n_heads, groups, dropout=dropout)
+        self.ff = SwiGLUBlock(dim, hidden_dim=4 * dim)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, rope, is_causal=True):
+        # Parallel residuals, no dropout
+        h = self.norm(x)
+        attn_out = self.attn(h, rope, is_causal=is_causal)
+        ff_out = self.ff(h)
+        return x + self.dropout(attn_out + ff_out)
+
+
 class ParallelBlock(nn.Module):
     def __init__(self, dim, n_heads, groups, dropout=0.0):
         super().__init__()
         self.norm = nn.RMSNorm(dim)
         self.attn = GQARope(dim, n_heads, groups, dropout=dropout)
-        self.ff = SwiGLU(dim, hidden_dim=4 * dim)
+        self.ff = SwiGLUBlock(dim, hidden_dim=4 * dim)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, rope, is_causal=True):
