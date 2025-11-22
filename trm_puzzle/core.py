@@ -1,4 +1,3 @@
-import math
 import torch
 import torch.nn as nn
 
@@ -10,20 +9,11 @@ class TinyRecursiveChessModel(nn.Module):
     TRM-style model:
 
       - Input: x_tokens (B, 69)  integer tokens for position
-      - Internal latents:
+      - Internal variables:
           x_emb: (B, D)  question embedding
-          y:     (B, D)  embedded answer
+          y_emb:     (B, D)  embedded answer
           z:     (B, D)  latent reasoning state
 
-      - Recursion:
-          For h in 1..H_cycles:
-              For l in 1..L_cycles:   # latent refinement
-                  z = core_z( concat(x_emb, y, z) )
-              y = core_y( concat(y, z) )   # answer refinement
-              logits_h = head(y)
-
-      - Output:
-          logits at each outer step (for deep supervision) or final step only.
     """
 
     def __init__(
@@ -44,64 +34,77 @@ class TinyRecursiveChessModel(nn.Module):
         self.H_cycles = H_cycles
         self.L_cycles = L_cycles
 
+        self.y_init = nn.Parameter(torch.zeros(1, 1, dim))
+        self.z_init = nn.Parameter(torch.zeros(1, 1, dim))
+
         # Position token embedding (piece/empty + castling + turn)
         self.token_emb = nn.Embedding(token_vocab_size, dim)
-
-        # Learned positional embedding over 69 tokens
-        self.pos_emb = nn.Parameter(torch.randn(seq_len, dim) / math.sqrt(dim))
-
-        # Initial answer embedding y0
-        self.y0 = nn.Parameter(torch.zeros(dim))
-
-        # Shared tiny reasoning network
         self.core = ReasoningNet(dim=dim, depth=core_depth, hidden_mult=hidden_mult)
 
-        # Linear adaptors for z- and y-updates
-        self.z_in = nn.Linear(3 * dim, dim, bias=False)  # [x_emb, y, z] -> dim
-        self.y_in = nn.Linear(2 * dim, dim, bias=False)  # [y, z] -> dim
-
         # Output head: y -> logits over moves
-        self.head = nn.Linear(dim, num_moves, bias=False)
+        self.out_head = nn.Linear(dim, num_moves, bias=False)
+        self.q_head = nn.Linear(dim, 1, bias=False)
 
-    # ------------------------
-    # Forward
-    # ------------------------
-    def forward(self, x: torch.Tensor, return_all_steps: bool = False):
+    def forward(
+        self,
+        x: torch.Tensor,
+        y_emb: torch.Tensor = None,
+        z: torch.Tensor = None,
+    ):
         """
-        x_tokens: (B, 69)
-
-        If return_all_steps:
-            returns logits_all: (H_cycles, B, num_moves)
-        else:
-            returns logits_final: (B, num_moves)
+        x_tokens: (B, T)
+        T = 69
         """
         device = x.device
-        B = x.size(0)
+        x_emb = self.token_emb(x)  # B, T, D
 
-        x_emb = self.token_emb(x)  # (B, T, D)
+        if y_emb is None:
+            y_emb = self.y_init.to(device)
+        if z is None:
+            z = self.z_init.to(device)
 
-        # init y and z
-        y = self.y0.unsqueeze(0).expand(B, -1)  # (B, D)
-        z = torch.zeros_like(y, device=device)  # (B, D)
+        with torch.no_grad():
+            for _ in range(self.H_cycles - 1):
+                for _ in range(self.L_cycles):
+                    z = self.core(x_emb + z + y_emb)  # B, T, D
+                y_emb = self.core(y_emb + z)
 
-        logits_list = []
+        for _ in range(self.L_cycles):
+            z = self.core(x_emb + z + y_emb)  # B, T, D
+        y_emb = self.core(y_emb + z)
 
-        for _ in range(self.H_cycles):
-            # latent refinement (L cycles)
-            for _ in range(self.L_cycles):
-                inp_z = torch.cat([x_emb, y, z], dim=-1)  # (B, 3D)
-                z = self.z_in(inp_z)  # (B, D)
-                z = self.core(z)  # (B, D)
+        logits = self.out_head(y_emb[:, -1, :])  # B, V
+        q_hat = self.q_head(y_emb[:, 0, :])  # B, 1
+        return (y_emb.detach(), z.detach(), logits, q_hat)
 
-            # answer refinement
-            inp_y = torch.cat([y, z], dim=-1)  # (B, 2D)
-            y = self.y_in(inp_y)  # (B, D)
-            y = self.core(y)  # (B, D)
 
-            logits = self.head(y)  # (B, V)
-            logits_list.append(logits)
+class DeepSupervision(nn.Module):
+    def __init__(self, base_model: nn.Module, opt, N=3, aux_loss_weight: float = 1):
+        super().__init__()
+        self.base_model = base_model
+        self.opt = opt
+        self.N = N
+        self.y_init = None
+        self.z_init = None
+        self.aux_loss_weight = aux_loss_weight
 
-        if return_all_steps:
-            return torch.stack(logits_list, dim=0)  # (H, B, V)
-        else:
-            return logits_list[-1]  # (B, V)
+    def forward(self, x: torch.Tensor, target_y):
+        y_emb = self.y_init
+        z = self.z_init
+        losses = []
+        for _ in range(self.N):
+            self.opt.zero_grad()
+            y_emb, z, logits, q_hat = self.base_model(x, y_emb, z)
+            loss = nn.functional.cross_entropy(logits, target_y)
+
+            yhat = logits.argmax(dim=-1)
+            loss += (
+                self.aux_loss_weight
+                * nn.functional.binary_cross_entropy_with_logits(
+                    q_hat.squeeze(), (yhat == target_y).float()
+                )
+            )
+            loss.backward()
+            losses.append(loss.item())
+            self.opt.step()
+        return losses

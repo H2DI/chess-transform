@@ -5,14 +5,14 @@ from torch.utils.data import DataLoader
 import logging
 
 from trm_puzzle.dataset import ChessTRMDataset
-from trm_puzzle.core import TinyRecursiveChessModel
+from trm_puzzle.core import TinyRecursiveChessModel, DeepSupervision
 from chess_seq.encoder import MoveEncoder
 
 
 def run_overfit(
     max_epochs: int = 5000,
     print_every: int = 50,
-    batch_size: int = 128,
+    batch_size: int = 64,
     target_loss: float = 0.1,
 ):
     """
@@ -61,44 +61,54 @@ def run_overfit(
     )
 
     logger.info("token_vocab_size=%d", int(ds.X.max()) + 1)
+    LR = 1e-4
+    N = 4
+    H = 2
+    L = 2
+    logger.info("H=%d L=%d N=%d", H, L, N)
 
     model = TinyRecursiveChessModel(
         token_vocab_size=int(ds.X.max()) + 1,
         num_moves=num_moves,
         dim=128,
-        H_cycles=2,
-        L_cycles=2,
+        seq_len=69,
+        H_cycles=H,
+        L_cycles=L,
+        core_depth=2,
+        hidden_mult=4,
+        # dim=128,
+        # H_cycles=2,
+        # L_cycles=2,
     ).to(device)
 
-    optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    # print model parameter counts
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logger.info(
+        "Model trainable params=%d (%.2fM)",
+        trainable_params,
+        trainable_params / 1e6,
+    )
 
     emb_size = model.token_emb.num_embeddings
     logger.info(
         "Created model on %s: token_emb=%s head_out=%d",
         device,
         emb_size,
-        model.head.out_features,
+        model.out_head.out_features,
     )
+
+    optim = torch.optim.AdamW(model.parameters(), lr=LR)
+    superviser = DeepSupervision(model, optim, N=N)
 
     start = time.time()
     last_train_loss = float("inf")
     last_test_loss = float("inf")
     for epoch in range(1, max_epochs + 1):
-        model.train()
-
-        optim.zero_grad()
-        logits = model(train_x)
-        loss = F.cross_entropy(logits, train_y)
-        loss.backward()
-        optim.step()
-
-        train_loss = loss.item()
-        last_train_loss = train_loss
-
-        # evaluate on test batch
-        model.eval()
+        superviser.train()
+        train_losses = superviser(train_x, train_y)
+        train_loss = train_losses[-1]
         with torch.no_grad():
-            logits_t = model(test_x)
+            _, _, logits_t, _ = model(test_x)
             test_loss = F.cross_entropy(logits_t, test_y).item()
             last_test_loss = test_loss
             preds = logits_t.argmax(dim=-1)

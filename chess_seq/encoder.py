@@ -41,6 +41,7 @@ class MoveEncoder(LabelEncoder):
         self.start_token_id = self.token_to_id[self.start_token]
         self.end_token_id = self.token_to_id[self.end_token]
         print(f"Loaded MoveEncoder from {path}")
+        return self
 
     def transform(self, tokens):
         return np.array([self.token_to_id[t] for t in tokens], dtype=np.int32)

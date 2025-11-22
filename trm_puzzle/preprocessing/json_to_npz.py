@@ -42,13 +42,13 @@ class BoardEncoder:
             tokens.append(self.piece_token(board.piece_at(square)))
 
         # 2) Castling (4 tokens)
-        tokens.append(1 if board.has_kingside_castling_rights(chess.WHITE) else 0)
-        tokens.append(1 if board.has_queenside_castling_rights(chess.WHITE) else 0)
-        tokens.append(1 if board.has_kingside_castling_rights(chess.BLACK) else 0)
-        tokens.append(1 if board.has_queenside_castling_rights(chess.BLACK) else 0)
+        tokens.append(13 if board.has_kingside_castling_rights(chess.WHITE) else 14)
+        tokens.append(15 if board.has_queenside_castling_rights(chess.WHITE) else 16)
+        tokens.append(17 if board.has_kingside_castling_rights(chess.BLACK) else 18)
+        tokens.append(19 if board.has_queenside_castling_rights(chess.BLACK) else 20)
 
         # 3) Turn (1 token)
-        tokens.append(0 if board.turn == chess.WHITE else 1)
+        tokens.append(21 if board.turn == chess.WHITE else 22)
 
         return np.array(tokens, dtype=np.int16)  # shape (69,)
 

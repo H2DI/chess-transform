@@ -8,14 +8,12 @@ from chess_seq.models import GQARope, RoPE
 class RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
-        self.weight = nn.Parameter(torch.ones(dim))
         self.eps = eps
 
     def forward(self, x):
         # x: (..., dim)
         norm = x.pow(2).mean(dim=-1, keepdim=True)
-        x = x * torch.rsqrt(norm + self.eps)
-        return self.weight * x
+        return x * torch.rsqrt(norm + self.eps)
 
 
 class SwiGLU(nn.Module):
@@ -30,7 +28,7 @@ class TinyAttentionBlock(nn.Module):
         super().__init__()
         inner_dim = dim * hidden_mult
         self.norm1 = RMSNorm(dim)
-        self.rope = RoPE(dim, 200)
+        self.rope = RoPE(dim // heads, 200)
         self.fc1 = GQARope(dim, heads=heads, groups=1)
         self.norm2 = RMSNorm(dim)
         self.fc2 = nn.Sequential(
@@ -40,9 +38,9 @@ class TinyAttentionBlock(nn.Module):
         )
 
     def forward(self, x):
-        # x: (B, T,  D)
         h = self.norm1(x + self.fc1(x, self.rope))
-        return self.norm2(h + self.fc2(h))
+        out = self.norm2(h + self.fc2(h))
+        return out
 
 
 class TinyMLPBlock(nn.Module):
@@ -63,20 +61,16 @@ class TinyMLPBlock(nn.Module):
         )
 
     def forward(self, x):
-        # x: B, D
         h = self.norm1(x + self.fc1(x))
-        return self.norm2(h + self.fc2(h))
+        out = self.norm2(h + self.fc2(h))
+        return out
 
 
 class ReasoningNet(nn.Module):
-    """
-    A tiny 2-layer network used inside TRM.
-    """
-
     def __init__(self, dim: int, depth: int = 2, hidden_mult: int = 4):
         super().__init__()
         self.layers = nn.ModuleList(
-            [TinyMLPBlock(dim, hidden_mult=hidden_mult) for _ in range(depth)]
+            [TinyAttentionBlock(dim, hidden_mult=hidden_mult) for _ in range(depth)]
         )
 
     def forward(self, x):

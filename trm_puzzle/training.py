@@ -1,133 +1,115 @@
 import torch
 import torch.nn.functional as F
 from typing import Tuple, Optional
-from .config import cfg
+from dataclasses import asdict
+from .config import Config
+import numpy as np
 
 
 from .dataset import ChessTRMDataset
-from .core import TinyRecursiveChessModel
+from .core import TinyRecursiveChessModel, DeepSupervision
 from torch.utils.data import random_split, DataLoader
 from chess_seq.encoder import MoveEncoder
 from torch.utils.tensorboard import SummaryWriter
 import os
+import logging
+
+
+logger = logging.getLogger(__name__)
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
 
 
 def train_one_epoch(
-    model: torch.nn.Module,
+    superviser: DeepSupervision,
+    cfg: Config,
     loader: DataLoader,
-    optimizer: torch.optim.Optimizer,
     device: torch.device,
-    deep_supervision: bool = True,
-    supervision_decay: float = 1.0,
     writer: Optional[SummaryWriter] = None,
     epoch: int = 0,
-    log_interval: int = 100,
     global_step_start: int = 0,
-    max_steps: Optional[int] = None,
     val_loader: Optional[DataLoader] = None,
-    val_interval: Optional[int] = None,
-    val_batches: Optional[int] = None,
-    checkpoint_dir: Optional[str] = None,
-    checkpoint_steps: Optional[int] = None,
 ):
-    model.train()
     total_loss = 0.0
     total_examples = 0
-    steps_done = 0
+    batches_seen = 0
+    global_step = global_step_start
 
     for i, (x, y) in enumerate(loader):
-        if max_steps is not None and steps_done >= max_steps:
-            break
         x = x.to(device)
         y = y.to(device)
 
-        optimizer.zero_grad()
+        # DeepSupervision wrapper handles forward/backward/step
+        losses = superviser(x, y)
+        loss = np.mean(losses)
 
-        if deep_supervision:
-            logits_all = model(x, return_all_steps=True)  # (H, B, V)
-            H, B, V = logits_all.shape
-            loss = 0.0
-            weight = 1.0
-            weight_sum = 0.0
+        total_examples += x.shape[0]
 
-            for h in range(H):
-                logits_h = logits_all[h]  # (B, V)
-                loss_h = F.cross_entropy(logits_h, y)
-                loss = loss + weight * loss_h
-                weight_sum += weight
-                weight *= supervision_decay  # can be < 1.0
-            loss = loss / weight_sum
-        else:
-            logits = model(x, return_all_steps=False)  # (B, V)
-            loss = F.cross_entropy(logits, y)
-
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
-
-        bs = x.size(0)
-        total_loss += loss.item() * bs
-        total_examples += bs
         # increment steps and compute global step
-        steps_done += 1
-        global_step = global_step_start + steps_done
+        batches_seen += 1
+        global_step += superviser.N
 
         # batch-level logging
-        if writer is not None and (steps_done) % log_interval == 0:
-            writer.add_scalar("loss/train_batch", loss.item(), global_step)
+        if batches_seen % cfg.train.log_interval == 0:
+            writer.add_scalar("loss/train_batch", loss, global_step)
             lr = (
-                optimizer.param_groups[0]["lr"]
-                if len(optimizer.param_groups) > 0
+                superviser.opt.param_groups[0]["lr"]
+                if len(superviser.opt.param_groups) > 0
                 else 0.0
             )
             writer.add_scalar("lr", lr, global_step)
+            logger.info(
+                f"[Epoch {epoch}] Step {global_step} train_loss={loss:.4f} lr={lr:.6g}"
+            )
 
         # Optionally run a quick validation eval every `val_interval` batches
-        if steps_done % val_interval == 0:
-            # evaluate on a small number of validation batches
+        if batches_seen % cfg.train.val_interval == 0:
             val_loss_sum = 0.0
             val_correct = 0
             val_examples = 0
             with torch.no_grad():
                 it = iter(val_loader)
-                for vb in range(val_batches):
+                for vb in range(cfg.train.val_batches):
                     vx, vy = next(it)
                     vx = vx.to(device)
                     vy = vy.to(device)
-                    v_logits = model(vx, return_all_steps=False)
+                    _, _, v_logits, _ = superviser.base_model(vx)
                     v_loss = F.cross_entropy(v_logits, vy, reduction="sum").item()
                     preds = v_logits.argmax(dim=-1)
                     val_loss_sum += v_loss
                     val_correct += (preds == vy).sum().item()
                     val_examples += vx.size(0)
 
-            if val_examples > 0:
-                val_avg = val_loss_sum / val_examples
-                val_acc = val_correct / val_examples
-                writer.add_scalar("loss/val_batch", val_avg, global_step)
-                writer.add_scalar("accuracy/val_batch", val_acc, global_step)
+            val_avg = val_loss_sum / val_examples
+            val_acc = val_correct / val_examples
+            writer.add_scalar("loss/val_batch", val_avg, global_step)
+            writer.add_scalar("accuracy/val_batch", val_acc, global_step)
+            logger.info(
+                f"[Epoch {epoch}] Step {global_step} val_loss={val_avg:.4f} val_acc={val_acc:.4f}"
+            )
 
         # checkpointing
-        if global_step % checkpoint_steps == 0:
-            os.makedirs(checkpoint_dir, exist_ok=True)
-            ckpt_path = os.path.join(checkpoint_dir, f"ckpt_{global_step}.pt")
+        if global_step % cfg.train.checkpoint_steps == 0:
+            os.makedirs(cfg.train.checkpoint_dir, exist_ok=True)
+            ckpt_path = os.path.join(cfg.train.checkpoint_dir, f"ckpt_{global_step}.pt")
             torch.save(
                 {
-                    "model_state": model.state_dict(),
-                    "optim_state": optimizer.state_dict(),
-                    "config": cfg.model,
+                    "model_state": superviser.base_model.state_dict(),
+                    "optim_state": superviser.opt.state_dict(),
+                    "config": asdict(cfg),
                     "global_step": global_step,
                     "epoch": epoch,
                 },
                 ckpt_path,
             )
-            if writer is not None:
-                writer.add_text("checkpoint", f"Saved {ckpt_path}", global_step)
-
-        steps_done += 1
+            writer.add_text("checkpoint", f"Saved {ckpt_path}", global_step)
+            logger.info(f"Saved checkpoint: {ckpt_path}")
 
     avg = total_loss / max(1, total_examples)
-    return avg, steps_done
+    return avg, global_step
 
 
 @torch.no_grad()
@@ -143,7 +125,7 @@ def evaluate(
         x = x.to(device)
         y = y.to(device)
 
-        logits = model(x, return_all_steps=False)  # (B, V)
+        _, _, logits, _ = model(x)
         loss = F.cross_entropy(logits, y)
 
         preds = logits.argmax(dim=-1)
@@ -161,11 +143,12 @@ def evaluate(
 
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    cfg = Config()
 
     full_ds = ChessTRMDataset(cfg.data.file)
-    N = len(full_ds)
-    val_n = int(N * cfg.data.val_split)
-    train_n = N - val_n
+    N_data = len(full_ds)
+    val_n = int(N_data * cfg.data.val_split)
+    train_n = N_data - val_n
 
     train_ds, val_ds = random_split(full_ds, [train_n, val_n])
 
@@ -199,35 +182,30 @@ def main():
         lr=cfg.train.lr,
         weight_decay=cfg.train.weight_decay,
     )
+    superviser = DeepSupervision(
+        base_model=model,
+        opt=optim,
+        N=cfg.train.supervision_N,
+        aux_loss_weight=1.0,
+    )
+
     # TensorBoard logging setup
-    tb_logdir = cfg.train.checkpoint_dir + "/tb_logs"
+    tb_logdir = cfg.train.log_dir
     os.makedirs(tb_logdir, exist_ok=True)
     writer = SummaryWriter(log_dir=tb_logdir)
 
-    # read runtime config from env
-    log_interval = cfg.train.log_interval
-    val_interval = cfg.train.val_interval
-    val_batches = cfg.train.val_batches
-    checkpoint_steps = cfg.train.checkpoint_steps
-    checkpoint_dir = cfg.train.checkpoint_dir
-
+    steps = 0
     for epoch in range(cfg.train.epochs):
         # Train for one epoch (uses train_one_epoch above) and get steps done
         train_loss, steps = train_one_epoch(
-            model,
+            superviser,
+            cfg,
             train_loader,
-            optim,
             device,
-            deep_supervision=True,
-            supervision_decay=1.0,
             writer=writer,
+            global_step_start=steps,
             epoch=epoch,
-            log_interval=log_interval,
             val_loader=val_loader,
-            val_interval=val_interval,
-            val_batches=val_batches,
-            checkpoint_dir=checkpoint_dir,
-            checkpoint_steps=checkpoint_steps,
         )
 
         # Evaluate on validation set
@@ -247,13 +225,12 @@ def main():
         writer.add_scalar("lr", lr, epoch)
 
         # Occasionally log parameter histograms
-        if (epoch + 1) % 5 == 0:
-            for name, param in model.named_parameters():
-                try:
-                    writer.add_histogram(name, param.detach().cpu().numpy(), epoch)
-                except Exception:
-                    # Skip parameters that can't be converted to numpy
-                    pass
+        for name, param in model.named_parameters():
+            try:
+                writer.add_histogram(name, param.detach().cpu().numpy(), epoch)
+            except Exception:
+                # Skip parameters that can't be converted to numpy
+                pass
 
     writer.close()
 
