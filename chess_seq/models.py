@@ -166,13 +166,14 @@ class GQARope(nn.Module):
         self.groups = groups
         self.head_dim = k // heads
 
-        self.qkv = nn.Linear(k, k + 2 * k // groups, bias=False)
+        self.q = nn.Linear(k, k, bias=False)
+        self.kv = nn.Linear(k, 2 * k // groups, bias=False)
 
         self.unify_heads = nn.Linear(k, k)
 
         self.dropout_p = dropout
 
-    def forward(self, x, rope=None, is_causal=True):
+    def forward(self, x, context=None, rope=None, is_causal=True):
         b, T, k = x.shape
         h, groups = self.heads, self.groups
         hg = h // groups  # kv_heads = h / g
@@ -180,7 +181,10 @@ class GQARope(nn.Module):
 
         # Q: b, T, k
         # K, V: b, T, k/g
-        Q, K, V = torch.split(self.qkv(x), [k, k // groups, k // groups], dim=-1)
+        Q = self.q(x)
+        if context is None:
+            context = x
+        K, V = torch.split(self.kv(context), [k // groups, k // groups], dim=-1)
 
         # Q: b, h, T, k/h
         Q = Q.view(b, T, h, kh).transpose(1, 2)
