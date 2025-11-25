@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.no_grad import no_grad
 
 from chess_seq.tictactoe.agent import TTTAgent
 from chess_seq.tictactoe.mechanics import TTTBoard

@@ -1,5 +1,6 @@
-from config import TrainingSession, ModelConfig, TrainingConfig
-from chess_seq.training.trainer_runner import ChessTrainerRunner
+from configs import TrainingSession, ModelConfig, TrainingConfig
+
+# from chess_seq.training.trainer_runner import ChessTrainerRunner
 from chess_seq.tictactoe.trainer import TTTTrainerRunner
 
 
