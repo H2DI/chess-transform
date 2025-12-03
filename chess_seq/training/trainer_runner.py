@@ -124,6 +124,7 @@ class ChessTrainerRunner:
             train_file,
             batch_size=self.training_config.batch_size,
             padding_value=self.model_config.pad_index,
+            max_length=self.model_config.block_size,
         )
 
         self._count_lines(train_file)
@@ -131,7 +132,6 @@ class ChessTrainerRunner:
         self.model.train()
         print("Start training")
         for i, seq in tqdm(enumerate(dataloader)):
-            print(f"Training step {i}, seq shape: {seq.shape}")
             self.n_steps += 1
             self.n_games += seq.size(0)
 
