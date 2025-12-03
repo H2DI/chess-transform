@@ -185,8 +185,9 @@ class ChessTrainerRunner:
         input_seq = seq[:, :-1]
         target = seq[:, 1:]
 
-        logits = self.model(input_seq)
-        loss = self.criterion(logits.view(-1, logits.size(-1)), target.reshape(-1))
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            logits = self.model(input_seq)
+            loss = self.criterion(logits.view(-1, logits.size(-1)), target.reshape(-1))
         return loss
 
     def save_checkpoint(self):
