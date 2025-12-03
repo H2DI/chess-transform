@@ -1,5 +1,6 @@
 from configs import TrainingSession, ModelConfig, TrainingConfig
 from chess_seq import ChessTrainerRunner
+import torch
 
 
 runner = ChessTrainerRunner(
