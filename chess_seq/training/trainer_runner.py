@@ -131,6 +131,7 @@ class ChessTrainerRunner:
         self.model.train()
         print("Start training")
         for i, seq in tqdm(enumerate(dataloader)):
+            print(f"Training step {i}, seq shape: {seq.shape}")
             self.n_steps += 1
             self.n_games += seq.size(0)
 
