@@ -2,7 +2,7 @@ import json
 import requests
 import torch
 
-from chess_seq.game_engine import ChessGameEngine
+from chess_seq import ChessGameEngine, MoveEncoder
 import chess_seq.utils as utils
 import chess
 
@@ -21,13 +21,15 @@ study_id = "LdUHTfjo"  # ada_chuk
 
 
 def publish_game(model_name, study_id):
-    model, encoder, checkpoint = utils.load_model(model_name)
+    model, _, checkpoint = utils.load_model(model_name)
     model.to(torch.device("cpu"))
     n_games = checkpoint["n_games"]
 
-    game = chess.Board()
-    engine = ChessGameEngine(model, encoder)
+    encoder = MoveEncoder()
+    encoder.load(config.encoder_path)
 
+    engine = ChessGameEngine(model, encoder)
+    game = chess.Board()
     game, pgn, bad_plies = engine.play_game(game=game, n_plies=200, greedy=False)
     num_plies = len(game.move_stack)
 
