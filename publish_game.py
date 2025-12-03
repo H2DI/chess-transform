@@ -19,6 +19,8 @@ study_id = "ZB0upGx"
 study_id = "jGATtknM"
 study_id = "LdUHTfjo"  # ada_chuk
 
+study_id = "ZbXAbPvL"
+
 
 def publish_game(model_name, study_id):
     model, _, checkpoint = utils.load_model(model_name)

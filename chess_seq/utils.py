@@ -71,7 +71,7 @@ def load_model(model_name, number=None, special_name=None):
     )
 
     model_config = checkpoint["model_config"]
-    model = models.ChessNet(model_config)
+    model = models.ChessNet(config=model_config)
 
     model.load_state_dict(checkpoint["model_state_dict"])
 
