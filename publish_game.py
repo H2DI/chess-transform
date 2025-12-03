@@ -71,8 +71,4 @@ def publish_game(model_name, study_id):
 
 
 if __name__ == "__main__":
-    model, encoder, checkpoint = utils.load_model(model_name)
-    num_params = sum(p.numel() for p in model.parameters())
-    print(f"Number of parameters in the model: {num_params}")
-
     publish_game(model_name, study_id)
