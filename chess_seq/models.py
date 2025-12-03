@@ -31,17 +31,19 @@ class RoPE(nn.Module):
     def forward(self, x):
         b, h, T, k = x.shape
         assert k % 2 == 0, f"Expected even embedding dim, got {k}"
-        x_reshaped = x.view(b, h, T, k // 2, 2)
-        x1 = x_reshaped[..., 0]
-        x2 = x_reshaped[..., 1]
         if T <= self.block_size:
             cos = self.cos[:T].unsqueeze(0).unsqueeze(0)
             sin = self.sin[:T].unsqueeze(0).unsqueeze(0)
         else:
             cos, sin = self._recompute_cossin(T, x.device)
 
-        rotated = torch.stack([x1 * cos + x2 * sin, -x1 * sin + x2 * cos], dim=-1)
-        return rotated.reshape(b, h, T, k)
+        x_even = x[..., 0::2]  # (B,H,T,D/2)
+        x_odd = x[..., 1::2]  # (B,H,T,D/2)
+
+        out = torch.empty_like(x)
+        out[..., 0::2] = x_even * cos - x_odd * sin
+        out[..., 1::2] = x_even * sin + x_odd * cos
+        return out
 
     def _get_angles(self, N, device=None):
         device = device or self.inv_freq.device
