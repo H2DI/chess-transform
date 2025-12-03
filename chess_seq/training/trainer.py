@@ -13,6 +13,8 @@ def initialize_optimizer(training_config: TrainingConfig, model: nn.Module):
         weight_decay=training_config.wd,
     )
 
+    total_steps = training_config.total_games // training_config.batch_size
+    n_warmup = int(training_config.warmup * total_steps)
     scheduler = torch.optim.lr_scheduler.SequentialLR(
         optimizer,
         schedulers=[
@@ -20,15 +22,15 @@ def initialize_optimizer(training_config: TrainingConfig, model: nn.Module):
                 optimizer,
                 start_factor=1e-3,
                 end_factor=1.0,
-                total_iters=training_config.warmup,
+                total_iters=n_warmup,
             ),
             torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer,
-                T_max=training_config.final_lr_time - training_config.warmup,
+                T_max=total_steps - n_warmup,
                 eta_min=training_config.lr_min,
             ),
         ],
-        milestones=[training_config.warmup],
+        milestones=[n_warmup],
     )
     return optimizer, scheduler
 

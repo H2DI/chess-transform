@@ -105,7 +105,7 @@ class ChessTrainerRunner:
         train_files = sorted(
             [train_folder + f for f in os.listdir(train_folder) if f.endswith(".npz")]
         )
-        for epoch in range(self.epoch, self.config.num_epochs):
+        for epoch in range(self.epoch, self.training_config.num_epochs):
             for file_id, train_file in enumerate(train_files):
                 if file_id + 1 < self.file_number and skip_seen_files:
                     print(f"Skipping {train_file} as it is already processed.")

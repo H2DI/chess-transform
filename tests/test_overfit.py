@@ -1,7 +1,11 @@
 import torch
-
-from dataclasses import dataclass
+import os
+import sys
+from dataclasses import dataclass, field
 from typing import List
+
+ROOT = os.path.dirname(os.path.dirname(__file__))
+sys.path.append(ROOT)
 
 from configs import ModelConfig, TrainingSession, TrainingConfig
 from chess_seq import ChessNet, ChessTrainerRunner, build_dataloader
@@ -25,7 +29,7 @@ class ModelConfigTiny:
     ff_expansion: int = 3
 
     pad_index: int = 4610
-    special_freqs: List[float] = None
+    special_freqs: List[float] = field(default_factory=lambda: [2])
     encoder_path: str = "data/move_encoder.pkl"
 
     device: str = "cpu"
