@@ -63,7 +63,7 @@ def test_first_moves(model, encoder, n_plies=30, prints=False):
 def eval_legal_moves_and_log(model, encoder, writer, n_games, lengths):
     engine = ChessGameEngine(model, encoder)
     sequence = engine.generate_sequence()
-    print(encoder.inverse_transform(sequence))
+    print(f"Sample game: {encoder.inverse_transform(sequence)}")
 
     for n_plies in lengths:
         n_bad, t_first_bad = test_first_moves(model, encoder, n_plies=n_plies)

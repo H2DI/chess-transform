@@ -1,5 +1,4 @@
 import os
-import pickle
 from tqdm import tqdm
 
 import torch
@@ -11,16 +10,22 @@ import chess_seq.utils as utils
 import chess_seq.training.trainer as trainer
 from chess_seq.data import datasets
 from chess_seq.evaluation import testing_model
-from chess_seq.training.training_config_classes import TrainingSession
+from chess_seq.encoder import MoveEncoder
+
+from configs import TrainingSession, ModelConfig, TrainingConfig
 
 
 class ChessTrainerRunner:
     def __init__(
-        self, session_config: TrainingSession, model_config=None, training_config=None
+        self,
+        session_config: TrainingSession,
+        model_config: ModelConfig = None,
+        training_config: TrainingConfig = None,
     ):
         self.config = session_config
         self.device = torch.device(self.config.device_str)
         self.model_name = session_config.model_name
+        self.encoder = MoveEncoder()
 
         if session_config.new_model:
             self._initialize_new_model(model_config)
@@ -30,7 +35,7 @@ class ChessTrainerRunner:
         self.model_config, self.training_config = self._load_configs()
         self.model = self._setup_model()
         self.optimizer, self.scheduler = self._setup_training()
-        self.encoder = self.training_state["encoder"]
+
         self.writer = SummaryWriter(
             log_dir=f"runs/chess_transformer_experiment/{self.model_config.name}"
         )
@@ -42,7 +47,7 @@ class ChessTrainerRunner:
         self.file_number = self.training_state["file_number"]
 
         self.criterion = torch.nn.CrossEntropyLoss(
-            ignore_index=self.model_config.vocab_size
+            ignore_index=self.model_config.pad_index
         )
 
     def _load_checkpoint(self):
@@ -62,6 +67,7 @@ class ChessTrainerRunner:
     def _setup_model(self):
         model = models.ChessNet(config=self.model_config).to(self.device)
         model.load_state_dict(self.training_state["model_state_dict"])
+        self.encoder.load(self.model_config.encoder_path)
         return model
 
     def _setup_training(self):
@@ -72,15 +78,15 @@ class ChessTrainerRunner:
         scheduler.load_state_dict(self.training_state["scheduler_state_dict"])
         return optimizer, scheduler
 
-    def _initialize_new_model(self, model_config):
+    def _initialize_new_model(self, model_config: ModelConfig):
         assert model_config is not None, (
             "Model configuration must be provided for new models"
         )
         assert model_config.name == self.config.model_name, "Model name mismatch"
+        self.encoder.load(model_config.encoder_path)
+
         self.model_config = model_config
-        with open(model_config.encoder_path, "rb") as f:
-            self.encoder = pickle.load(f)
-        utils.build_and_save_model(model_config)
+        self.model = utils.build_and_save_model(model_config)
 
     def _initialize_training(self, training_config):
         assert training_config is not None, (
@@ -96,10 +102,10 @@ class ChessTrainerRunner:
     def train(self, skip_seen_files=True):
         train_folder = self.config.data_folder
         print(f"{train_folder=}")
-        train_files = [
-            train_folder + f for f in os.listdir(train_folder) if f.endswith(".npz")
-        ]
-        for epoch in range(self.config.num_epochs - self.epoch):
+        train_files = sorted(
+            [train_folder + f for f in os.listdir(train_folder) if f.endswith(".npz")]
+        )
+        for epoch in range(self.epoch, self.config.num_epochs):
             for file_id, train_file in enumerate(train_files):
                 if file_id + 1 < self.file_number and skip_seen_files:
                     print(f"Skipping {train_file} as it is already processed.")
@@ -109,14 +115,14 @@ class ChessTrainerRunner:
                 print(f"File : {train_file}")
                 self._train_on_file(train_file)
             self.file_number = 0
-            self.epoch += 1
+            self.epoch = epoch + 1
+            self.save_checkpoint()
 
     def _train_on_file(self, train_file):
         dataloader = datasets.build_dataloader(
             train_file,
             batch_size=self.training_config.batch_size,
-            device=self.device,
-            padding_value=self.model_config.vocab_size,
+            padding_value=self.model_config.pad_index,
         )
 
         self._count_lines(train_file)
@@ -125,16 +131,13 @@ class ChessTrainerRunner:
         print("Start training")
         for i, seq in tqdm(enumerate(dataloader)):
             self.n_steps += 1
-            self.n_games += self.training_config.batch_size
+            self.n_games += seq.size(0)
 
             self.optimizer.zero_grad()
-            loss, logits = self._train_step(seq)
+            loss = self._train_step(seq)
 
-            with torch.no_grad():
-                self.writer.add_scalar("Loss/train", loss.item(), self.n_steps)
-                self.writer.add_scalar(
-                    "LR", self.scheduler.get_last_lr()[0], self.n_steps
-                )
+            self.writer.add_scalar("Loss/train", loss.item(), self.n_steps)
+            self.writer.add_scalar("LR", self.scheduler.get_last_lr()[0], self.n_steps)
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
@@ -157,7 +160,7 @@ class ChessTrainerRunner:
     def _count_lines(self, train_file):
         with open(train_file, "rb") as f:
             data = np.load(f)
-            num_lines = len(data)
+            num_lines = len(data["game_ids"])
         print(f"Number of games in training file: {num_lines}")
 
     def _evaluate_model(self):
@@ -179,7 +182,7 @@ class ChessTrainerRunner:
 
         logits = self.model(input_seq)
         loss = self.criterion(logits.view(-1, logits.size(-1)), target.reshape(-1))
-        return loss, logits
+        return loss
 
     def save_checkpoint(self):
         checkpoint = {
@@ -189,7 +192,6 @@ class ChessTrainerRunner:
             "n_games": self.n_games,
             "epoch": self.epoch,
             "file_number": self.file_number,
-            "encoder": self.encoder,
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "scheduler_state_dict": self.scheduler.state_dict(),

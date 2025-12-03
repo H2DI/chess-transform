@@ -1,5 +1,9 @@
 # Transformers for sequences of chess moves
 
+
+Architecture is a reimplementation of QWEN3. 
+
+
 Work in progress.
 
 From scratch pytorch implementation of Transformer models to predict sequences of chess moves. 

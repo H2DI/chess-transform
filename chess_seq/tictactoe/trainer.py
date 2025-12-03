@@ -12,7 +12,7 @@ class TTTTrainerRunner(ChessTrainerRunner):
         self.model.eval()
         eval_legal_moves_and_log(
             self.model,
-            self.encoder,
+            self.encoder_dict,
             self.writer,
             self.n_games,
             self.config.test_games_lengths,

@@ -1,13 +1,15 @@
 import numpy as np
-import torch
 import random
 import chess
+import torch
+from torch import nn
 
 from chess_seq.encoder import InvalidMove
+from chess_seq.encoder import MoveEncoder
 
 
 class ChessGameEngine:
-    def __init__(self, model, encoder, device=None):
+    def __init__(self, model: nn.Module, encoder: MoveEncoder, device=None):
         self.model = model
         self.encoder = encoder
         self.device = device if device else next(model.parameters()).device
@@ -25,7 +27,7 @@ class ChessGameEngine:
         device = self.device
 
         if sequence is None:
-            sequence = torch.tensor(np.array([self.start_token_id]), device=device)
+            sequence = torch.tensor(np.array([[self.start_token_id]]), device=device)
         for _ in range(n_plies):
             out = model(sequence)  # B, T, vocab_size
             next_id = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)

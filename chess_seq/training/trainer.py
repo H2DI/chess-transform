@@ -1,16 +1,24 @@
 import torch
-import torch.optim as optim
+import torch.nn as nn
+
+from configs import TrainingConfig
 
 
-def initialize_optimizer(training_config, model):
-    optimizer = optim.Adam(model.parameters(), lr=training_config.lr)
+def initialize_optimizer(training_config: TrainingConfig, model: nn.Module):
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=training_config.lr,
+        betas=(0.9, 0.98),
+        eps=1e-8,
+        weight_decay=training_config.wd,
+    )
 
     scheduler = torch.optim.lr_scheduler.SequentialLR(
         optimizer,
         schedulers=[
             torch.optim.lr_scheduler.LinearLR(
                 optimizer,
-                start_factor=0.1,
+                start_factor=1e-3,
                 end_factor=1.0,
                 total_iters=training_config.warmup,
             ),

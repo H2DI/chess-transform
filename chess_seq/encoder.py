@@ -20,10 +20,12 @@ class MoveEncoder(LabelEncoder):
         self.start_token = "<start>"
         self.end_token = "<end>"
 
+        self.id_to_token = []
+        self.token_to_id = {}
+
     def build(self):
-        tokens = self._generate_all_tokens()
-        self.token_to_id = {t: i for i, t in enumerate(tokens)}
-        self.id_to_token = tokens
+        self.id_to_token = self._generate_all_tokens()
+        self.token_to_id = {t: i for i, t in enumerate(self.id_to_token)}
 
         self.start_token_id = self.token_to_id[self.start_token]
         self.end_token_id = self.token_to_id[self.end_token]
@@ -32,7 +34,7 @@ class MoveEncoder(LabelEncoder):
     def save(self, path):
         with open(path, "wb") as f:
             pickle.dump(self.id_to_token, f)
-        print(f"Saved MoveEncoder to {path}")
+        print(f"Saved MoveEncoder id_to_token to {path}")
 
     def load(self, path):
         with open(path, "rb") as f:
@@ -130,8 +132,9 @@ class MoveEncoder(LabelEncoder):
 if __name__ == "__main__":
     move_encoder = MoveEncoder()
     move_encoder.build()
-    move_encoder.save("data/move_encoder.pkl")
+    # move_encoder.save("data/move_encoder.pkl")
 
+    print("Number of tokens:", len(move_encoder.id_to_token))
     print(move_encoder.token_to_id["e2e4"])
     print(move_encoder.token_to_id["e7e8pq"])
     print(move_encoder.id_to_token[4500])

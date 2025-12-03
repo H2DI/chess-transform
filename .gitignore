@@ -177,3 +177,4 @@ test.py
 configs.py
 /configs
 config.py
+scripts/build_testing_npz.py

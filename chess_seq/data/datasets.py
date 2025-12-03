@@ -5,17 +5,10 @@ from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
 import numpy as np
-import os
-
-"""
-TODO: 
-sort games by  length
-filter games that end in checkmate
-"""
 
 
 class ChessDataset(IterableDataset):
-    def __init__(self, npz_path, device=None, shuffle=False):
+    def __init__(self, npz_path, shuffle=False):
         """
         npz_path: path to dataset_XXXXX.npz file
         shuffle: randomize order of samples
@@ -23,16 +16,12 @@ class ChessDataset(IterableDataset):
         self.npz_path = npz_path
         self.shuffle = shuffle
 
-        if device is None:
-            device = torch.device("cpu")
-        self.device = device
-
-        # Load entire file once (tokens is object array)
+        # Load entire file once
         data = np.load(npz_path, allow_pickle=True)
 
         self.game_ids = data["game_ids"]  # (N,)
-        self.tokens = data["tokens"]  # (N,) object array
-        self.num_samples = len(self.tokens)
+        self.token_ids = data["tokens"]  # (N,) object array
+        self.num_samples = len(self.token_ids)
 
     def __iter__(self):
         indices = np.arange(self.num_samples)
@@ -40,28 +29,23 @@ class ChessDataset(IterableDataset):
             np.random.shuffle(indices)
 
         for i in indices:
-            yield torch.tensor(self.tokens[i], device=self.device)
+            yield torch.tensor(self.token_ids[i], dtype=torch.long)
 
 
 def build_dataloader(
     npz_path,
     batch_size=16,
-    device=None,
-    padding_value=-1,
+    padding_value=4610,
     max_length=500,
     shuffle=False,
 ):
     dataset = ChessDataset(
         npz_path=npz_path,
-        device=device,
         shuffle=shuffle,
     )
 
     def collate_fn(batch_list):
-        # truncate
         batch_list = [seq[:max_length] for seq in batch_list]
-
-        # pad
         padded = pad_sequence(batch_list, batch_first=True, padding_value=padding_value)
         return padded
 
