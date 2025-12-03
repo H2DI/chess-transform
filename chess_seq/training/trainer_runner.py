@@ -137,14 +137,16 @@ class ChessTrainerRunner:
             self.optimizer.zero_grad()
             loss = self._train_step(seq)
 
-            self.writer.add_scalar("Loss/train", loss.item(), self.n_steps)
-            self.writer.add_scalar("LR", self.scheduler.get_last_lr()[0], self.n_steps)
-
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
 
             self.optimizer.step()
             self.scheduler.step()
+
+            self.writer.add_scalar(
+                "Loss/train", float(loss.detach().cpu()), self.n_steps
+            )
+            self.writer.add_scalar("LR", self.scheduler.get_last_lr()[0], self.n_steps)
             if i % 100 == 0:
                 trainer.log_grads(self.writer, self.model, self.n_steps)
                 trainer.log_weight_norms(self.writer, self.model, self.n_steps)
@@ -164,6 +166,7 @@ class ChessTrainerRunner:
             num_lines = len(data["game_ids"])
         print(f"Number of games in training file: {num_lines}")
 
+    @torch.no_grad()
     def _evaluate_model(self):
         self.model.eval()
         testing_model.eval_legal_moves_and_log(
