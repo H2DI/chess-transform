@@ -155,9 +155,6 @@ class ChessTrainerRunner:
             if i % self.config.test_interval == 0:
                 self._evaluate_model()
 
-            if i % self.config.checkpoint_interval == 0 and i > 0:
-                self.save_checkpoint()
-
         self.save_checkpoint()
         self._evaluate_model()
 
