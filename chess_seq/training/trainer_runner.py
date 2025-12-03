@@ -73,7 +73,7 @@ class ChessTrainerRunner:
         model = models.ChessNet(config=self.model_config).to(self.device)
         model.load_state_dict(training_state["model_state_dict"])
         self.model = model
-        if self.config.compile:
+        if self.config.jit:
             self.model = torch.compile(self.model)
 
     def _setup_training(self, training_state):
@@ -91,7 +91,7 @@ class ChessTrainerRunner:
     def _initialize_new_model(self):
         self.model = utils.build_and_save_model(self.model_config)
         self.model = self.model.to(self.device)
-        if self.config.compile:
+        if self.config.jit:
             self.model = torch.compile(self.model)
 
     def _initialize_training(self):
