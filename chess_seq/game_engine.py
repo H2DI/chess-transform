@@ -85,6 +85,7 @@ class ChessGameEngine:
                 break
         return game, pgn_game, bad_plies
 
+    @torch.no_grad()
     def _generate_next_token_id(self, sequence, greedy=True, no_end=True):
         out = self.model(sequence)  # B, T, vocab_size
         if greedy:

@@ -17,6 +17,7 @@ def build_and_save_model(model_config):
     print(
         f"Number of parameters in model: {sum(p.numel() for p in model.parameters())}"
     )
+    del base_checkpoint
     return model
 
 

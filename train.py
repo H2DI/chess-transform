@@ -1,5 +1,3 @@
-import torch
-
 from configs import TrainingSession, ModelConfig, TrainingConfig
 from chess_seq import ChessTrainerRunner
 
@@ -12,7 +10,5 @@ runner = ChessTrainerRunner(
     training_config=TrainingConfig(),
 )
 
-if session_config.compile:
-    runner.model = torch.compile(runner.model)
 
 runner.train()

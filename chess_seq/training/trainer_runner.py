@@ -25,26 +25,32 @@ class ChessTrainerRunner:
         self.config = session_config
         self.device = torch.device(self.config.device_str)
         self.model_name = session_config.model_name
+
+        if session_config.resume:
+            training_state = self._load_checkpoint()
+            self._load_configs(training_state)
+            self._setup_model(training_state)
+            self._setup_training(training_state)
+            del training_state
+        else:
+            assert model_config is not None, (
+                "Model configuration must be provided for new models"
+            )
+            assert training_config is not None, (
+                "Training configuration must be provided for new models"
+            )
+            self.model_config = model_config
+            self.training_config = training_config
+            self._initialize_new_model()
+            self._initialize_training()
+            self.save_checkpoint()
+
         self.encoder = MoveEncoder()
-
-        if session_config.new_model:
-            self._initialize_new_model(model_config)
-            self._initialize_training(training_config)
-
-        self.training_state = self._load_checkpoint()
-        self.model_config, self.training_config = self._load_configs()
-        self.model = self._setup_model()
-        self.optimizer, self.scheduler = self._setup_training()
+        self.encoder.load(self.model_config.encoder_path)
 
         self.writer = SummaryWriter(
             log_dir=f"runs/chess_transformer_experiment/{self.model_config.name}"
         )
-
-        self.n_steps = self.training_state["n_steps"]
-        self.n_games = self.training_state["n_games"]
-
-        self.epoch = self.training_state["epoch"]
-        self.file_number = self.training_state["file_number"]
 
         self.criterion = torch.nn.CrossEntropyLoss(
             ignore_index=self.model_config.pad_index
@@ -54,50 +60,45 @@ class ChessTrainerRunner:
         checkpoint_path = utils.get_latest_checkpoint(self.model_name)
         checkpoint = torch.load(
             checkpoint_path,
-            map_location=self.device,
+            map_location="cpu",
             weights_only=False,
         )
         return checkpoint
 
-    def _load_configs(self):
-        model_config = self.training_state["model_config"]
-        training_config = self.training_state["training_config"]
-        return model_config, training_config
+    def _load_configs(self, training_state):
+        self.model_config = training_state["model_config"]
+        self.training_config = training_state["training_config"]
 
-    def _setup_model(self):
+    def _setup_model(self, training_state):
         model = models.ChessNet(config=self.model_config).to(self.device)
-        model.load_state_dict(self.training_state["model_state_dict"])
-        self.encoder.load(self.model_config.encoder_path)
-        return model
+        model.load_state_dict(training_state["model_state_dict"])
+        self.model = model
+        if self.config.compile:
+            self.model = torch.compile(self.model)
 
-    def _setup_training(self):
-        optimizer, scheduler = trainer.initialize_optimizer(
+    def _setup_training(self, training_state):
+        self.optimizer, self.scheduler = trainer.initialize_optimizer(
             self.training_config, self.model
         )
-        optimizer.load_state_dict(self.training_state["optimizer_state_dict"])
-        scheduler.load_state_dict(self.training_state["scheduler_state_dict"])
-        return optimizer, scheduler
+        self.optimizer.load_state_dict(training_state["optimizer_state_dict"])
+        self.scheduler.load_state_dict(training_state["scheduler_state_dict"])
 
-    def _initialize_new_model(self, model_config: ModelConfig):
-        assert model_config is not None, (
-            "Model configuration must be provided for new models"
-        )
-        assert model_config.name == self.config.model_name, "Model name mismatch"
-        self.encoder.load(model_config.encoder_path)
+        self.n_steps = training_state["n_steps"]
+        self.n_games = training_state["n_games"]
+        self.epoch = training_state["epoch"]
+        self.file_number = training_state["file_number"]
 
-        self.model_config = model_config
-        self.model = utils.build_and_save_model(model_config)
+    def _initialize_new_model(self):
+        self.model = utils.build_and_save_model(self.model_config)
+        self.model = self.model.to(self.device)
+        if self.config.compile:
+            self.model = torch.compile(self.model)
 
-    def _initialize_training(self, training_config):
-        assert training_config is not None, (
-            "Training configuration must be provided for new models"
-        )
-        self.training_config = training_config
+    def _initialize_training(self):
         self.n_steps, self.n_games, self.epoch, self.file_number = 0, 0, 0, 0
         self.optimizer, self.scheduler = trainer.initialize_optimizer(
-            training_config, self.model
+            self.training_config, self.model
         )
-        self.save_checkpoint()
 
     def train(self, skip_seen_files=True):
         train_folder = self.config.data_folder
