@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Strip optimizer and scheduler states from saved checkpoints.
 
 This script searches `--checkpoints-dir` and its immediate subdirectories for
@@ -20,6 +19,8 @@ import re
 import tempfile
 import shutil
 from typing import List
+
+import configs
 
 import torch
 
