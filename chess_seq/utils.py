@@ -3,6 +3,7 @@ import re
 import torch
 
 import chess_seq.models as models
+from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 
 
 def build_and_save_model(model_config):
@@ -69,14 +70,17 @@ def load_model(model_name, number=None, special_name=None):
     checkpoint = torch.load(
         checkpoint_path, map_location=torch.device("cpu"), weights_only=False
     )
+    print(f"Loading model from {checkpoint_path}")
 
     model_config = checkpoint["model_config"]
     model = models.ChessNet(config=model_config)
-    print(checkpoint["model_state_dict"].keys())
+    sd = checkpoint["model_state_dict"]
+    consume_prefix_in_state_dict_if_present(sd, "_orig_mod.")
+    # print(checkpoint["model_state_dict"].keys())
 
-    model.load_state_dict(checkpoint["model_state_dict"])
+    model.load_state_dict(sd)
 
-    print(f"Loaded model from {checkpoint_path}")
+    print("Model loaded.")
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters in model: {num_params}")
     return model, model_config, checkpoint
