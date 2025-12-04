@@ -88,7 +88,7 @@ class TTTGui:
 
 
 if __name__ == "__main__":
-    model, encoder, checkpoint = utils.load_model(
+    model, encoder, _ = utils.load_model(
         "ttt_large_573440_GRPO", special_name="no_loss"
     )
     player = NNPlayer(model, encoder, mask_illegal=True)

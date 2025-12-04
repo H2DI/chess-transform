@@ -76,11 +76,13 @@ def load_model(model_name, number=None, special_name=None):
     model = models.ChessNet(config=model_config)
     sd = checkpoint["model_state_dict"]
     consume_prefix_in_state_dict_if_present(sd, "_orig_mod.")
-    # print(checkpoint["model_state_dict"].keys())
+
+    info = {["n_games"]: checkpoint.get("n_games", 0)}
+    del checkpoint
 
     model.load_state_dict(sd)
 
     print("Model loaded.")
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters in model: {num_params}")
-    return model, model_config, checkpoint
+    return model, model_config, info

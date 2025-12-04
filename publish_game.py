@@ -23,9 +23,9 @@ study_id = "ZbXAbPvL"
 
 
 def publish_game(model_name, study_id):
-    model, _, checkpoint = utils.load_model(model_name)
+    model, _, info = utils.load_model(model_name)
     model.to(torch.device("cpu"))
-    n_games = checkpoint["n_games"]
+    n_games = info["n_games"]
 
     encoder = MoveEncoder()
     encoder.load(config.encoder_path)

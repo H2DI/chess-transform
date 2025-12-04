@@ -47,8 +47,8 @@ if __name__ == "__main__":
         model = utils.build_and_save_model(model_config)
         base_name = f"{model_config.name}_GRPO"
     else:
-        model, model_config, checkpoint = utils.load_model(session_config.model_name)
-        base_name = f"{model_config.name}_{checkpoint['n_games']}"
+        model, model_config, info = utils.load_model(session_config.model_name)
+        base_name = f"{model_config.name}_{info['n_games']}"
 
     with open(model_config.encoder_path, "rb") as f:
         encoder = pickle.load(f)
