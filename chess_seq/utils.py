@@ -72,6 +72,7 @@ def load_model(model_name, number=None, special_name=None):
 
     model_config = checkpoint["model_config"]
     model = models.ChessNet(config=model_config)
+    print(checkpoint["model_state_dict"].keys())
 
     model.load_state_dict(checkpoint["model_state_dict"])
 
