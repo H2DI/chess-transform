@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from configs import ModelConfig
+from .configs import ModelConfig
 
 
 class RoPE(nn.Module):

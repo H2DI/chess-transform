@@ -1,13 +1,12 @@
-from configs import TrainingSession, ModelConfig, TrainingConfig
-from chess_seq import ChessTrainerRunner
 import torch
+
+from configs import TrainingSession, ModelConfig, TrainingConfig
+from chess_seq.chess_seq import ChessTrainerRunner
 
 torch.set_float32_matmul_precision("high")  # or "medium"
 
-session_config = TrainingSession()
-
 runner = ChessTrainerRunner(
-    session_config=session_config,
+    session_config=TrainingSession(),
     model_config=ModelConfig(),
     training_config=TrainingConfig(),
 )

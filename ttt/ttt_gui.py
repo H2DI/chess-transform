@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 
-import chess_seq.utils as utils
+import chess_seq.chess_seq.utils as utils
 from chess_seq.tictactoe.mechanics import TTTBoard
 from chess_seq.tictactoe.players import NNPlayer
 

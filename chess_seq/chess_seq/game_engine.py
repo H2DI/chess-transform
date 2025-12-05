@@ -4,8 +4,7 @@ import chess
 import torch
 from torch import nn
 
-from chess_seq.encoder import InvalidMove
-from chess_seq.encoder import MoveEncoder
+from .encoder import InvalidMove, MoveEncoder
 
 
 class ChessGameEngine:
@@ -38,24 +37,28 @@ class ChessGameEngine:
         return sequence.squeeze(0).cpu().numpy()
 
     @torch.no_grad()
-    def play_game(self, game=None, n_plies=30, record_pgn=True, greedy=True):
+    def play_game(
+        self, game=None, n_plies=30, record_pgn=True, greedy=True, mask_illegal=False
+    ):
         """
         Plays a chess game. A random move is chosen if the model's output is not a valid
         move.
         """
 
-        device = self.device
-        encoder = self.encoder
         if game is None:
             game = chess.Board()
-            sequence = torch.tensor(np.array([[self.start_token_id]]), device=device)
+            sequence = torch.tensor(
+                np.array([[self.start_token_id]]), device=self.device
+            )
         else:
-            sequence = encoder.board_to_sequence(game, end=False)
-            sequence = torch.tensor(np.array([sequence]), device=device)
+            sequence = self.encoder.board_to_sequence(game, end=False)
+            sequence = torch.tensor(np.array([sequence]), device=self.device)
 
         if record_pgn:
             pgn_game = (
-                encoder.board_to_pgn(game) if game is not None else chess.pgn.Game()
+                self.encoder.board_to_pgn(game)
+                if game is not None
+                else chess.pgn.Game()
             )
             node = pgn_game.end()
             del pgn_game.headers["Date"]
@@ -68,7 +71,16 @@ class ChessGameEngine:
         bad_plies = []
 
         for _ in range(n_plies):
-            token_id = self._generate_next_token_id(sequence, greedy=greedy)
+            if mask_illegal:
+                legal_moves = list(game.legal_moves)
+                legal_token_ids = [
+                    self.encoder.move_to_id(move) for move in legal_moves
+                ]
+                mask = torch.zeros(self.model.config.vocab_size, device=self.device)
+                mask[legal_token_ids] = 1
+            else:
+                mask = None
+            token_id = self._generate_next_token_id(sequence, greedy=greedy, mask=mask)
             current_ply += 1
             game, node, bad_plies, sequence = self._play_move_or_fallback(
                 token_id,
@@ -85,12 +97,14 @@ class ChessGameEngine:
         return game, pgn_game, bad_plies
 
     @torch.no_grad()
-    def _generate_next_token_id(self, sequence, greedy=True, no_end=True):
+    def _generate_next_token_id(self, sequence, greedy=True, mask=None):
         out = self.model(sequence)  # B, T, vocab_size
+        logits = out[0, -1]
+        if mask is not None:
+            logits = logits.masked_fill(mask == 0, float("-inf"))
         if greedy:
             next_token_id = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
         else:
-            logits = out[0, -1]
             dist = torch.distributions.Categorical(logits=logits)
             next_token_id = dist.sample().unsqueeze(0).unsqueeze(0)
         return next_token_id
@@ -143,6 +157,7 @@ class ChessGameEngine:
             else:
                 raise InvalidMove(f"{chess_move} is illegal")
         except InvalidMove as e:
+            print(f"Invalid move proposed: {full_move}. {e}")
             legal_moves = list(game.legal_moves)
             random_move = random.choice(legal_moves)
             game.push(random_move)

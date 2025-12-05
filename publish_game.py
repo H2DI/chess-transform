@@ -3,7 +3,7 @@ import requests
 import torch
 
 from chess_seq import ChessGameEngine, MoveEncoder
-import chess_seq.utils as utils
+import chess_seq.chess_seq.utils as utils
 import chess
 
 import argparse
@@ -20,7 +20,7 @@ STUDY_ID = "ZbXAbPvL"
 ENCODER_PATH = "data/move_encoder.pkl"
 
 
-def publish_game(model_name, study_id, checkpoint_name=None):
+def publish_game(model_name, study_id, checkpoint_name=None, mask_illegal=False):
     model, _, info = utils.load_model(model_name, special_name=checkpoint_name)
     model.to(torch.device("cpu"))
     n_games = info["n_games"]
@@ -30,7 +30,9 @@ def publish_game(model_name, study_id, checkpoint_name=None):
 
     engine = ChessGameEngine(model, encoder)
     game = chess.Board()
-    game, pgn, bad_plies = engine.play_game(game=game, n_plies=200, greedy=False)
+    game, pgn, bad_plies = engine.play_game(
+        game=game, n_plies=200, greedy=True, mask_illegal=mask_illegal
+    )
     num_plies = len(game.move_stack)
 
     comment = (
@@ -78,8 +80,18 @@ if __name__ == "__main__":
         required=True,
         help="Checkpoint name or path to use",
     )
+    parser.add_argument(
+        "--mask_illegal",
+        required=False,
+        default=False,
+        type=bool,
+        help="Name of the model to load",
+    )
     args = parser.parse_args()
 
     model_name = args.model_name
     checkpoint_name = args.checkpoint_name
-    publish_game(model_name, STUDY_ID, checkpoint_name=checkpoint_name)
+    mask_illegal = args.mask_illegal
+    publish_game(
+        model_name, STUDY_ID, checkpoint_name=checkpoint_name, mask_illegal=mask_illegal
+    )

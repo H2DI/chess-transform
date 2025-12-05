@@ -1,7 +1,9 @@
 import torch
-import torch.nn as nn
+from torch import nn
 
-from configs import TrainingConfig
+from ..configs import TrainingConfig
+from ..game_engine import ChessGameEngine
+from ..evaluation.testing_model import test_first_moves
 
 
 def initialize_optimizer(training_config: TrainingConfig, model: nn.Module):
@@ -71,3 +73,14 @@ def log_average_group(writer, name, values, step):
         sum(values) / len(values),
         step,
     )
+
+
+def eval_legal_moves_and_log(model, encoder, writer, n_games, lengths):
+    engine = ChessGameEngine(model, encoder)
+    sequence = engine.generate_sequence()
+    print(f"Sample game: {encoder.inverse_transform(sequence)}")
+
+    for n_plies in lengths:
+        n_bad, t_first_bad = test_first_moves(model, encoder, n_plies=n_plies)
+        log_stat_group(writer, f"Play{n_plies}/NumberOfBadMoves", n_bad, n_games)
+        log_stat_group(writer, f"Play{n_plies}/FirstBadMoves", t_first_bad, n_games)

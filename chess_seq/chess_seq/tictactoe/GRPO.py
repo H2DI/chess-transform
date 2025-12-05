@@ -11,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import chess_seq.tictactoe.mechanics as mechanics
 from chess_seq.tictactoe.agent import TTTAgent
-from chess_seq.utils import clone_model
+from chess_seq.chess_seq.utils import clone_model
 from config import GRPOConfig, ModelConfig
 
 

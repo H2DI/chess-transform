@@ -5,14 +5,19 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
-import chess_seq.models as models
-import chess_seq.utils as utils
-import chess_seq.training.trainer as trainer
-from chess_seq.data import datasets
-from chess_seq.evaluation import testing_model
-from chess_seq.encoder import MoveEncoder
+from .. import utils
 
-from configs import TrainingSession, ModelConfig, TrainingConfig
+from ..datasets.datasets import build_dataloader
+from ..models import ChessNet
+from ..encoder import MoveEncoder
+from ..configs import TrainingSession, ModelConfig, TrainingConfig
+
+from .train_utils import (
+    initialize_optimizer,
+    log_grads,
+    log_weight_norms,
+    eval_legal_moves_and_log,
+)
 
 
 class ChessTrainerRunner:
@@ -70,14 +75,14 @@ class ChessTrainerRunner:
         self.training_config = training_state["training_config"]
 
     def _setup_model(self, training_state):
-        model = models.ChessNet(config=self.model_config).to(self.device)
+        model = ChessNet(config=self.model_config).to(self.device)
         model.load_state_dict(training_state["model_state_dict"])
         self.model = model
         if self.config.jit:
             self.model = torch.compile(self.model)
 
     def _setup_training(self, training_state):
-        self.optimizer, self.scheduler = trainer.initialize_optimizer(
+        self.optimizer, self.scheduler = initialize_optimizer(
             self.training_config, self.model
         )
         self.optimizer.load_state_dict(training_state["optimizer_state_dict"])
@@ -96,7 +101,7 @@ class ChessTrainerRunner:
 
     def _initialize_training(self):
         self.n_steps, self.n_games, self.epoch, self.file_number = 0, 0, 0, 0
-        self.optimizer, self.scheduler = trainer.initialize_optimizer(
+        self.optimizer, self.scheduler = initialize_optimizer(
             self.training_config, self.model
         )
 
@@ -120,7 +125,7 @@ class ChessTrainerRunner:
             self.save_checkpoint()
 
     def _train_on_file(self, train_file):
-        dataloader = datasets.build_dataloader(
+        dataloader = build_dataloader(
             train_file,
             batch_size=self.training_config.batch_size,
             padding_value=self.model_config.pad_index,
@@ -149,8 +154,8 @@ class ChessTrainerRunner:
             )
             self.writer.add_scalar("LR", self.scheduler.get_last_lr()[0], self.n_steps)
             if i % 100 == 0:
-                trainer.log_grads(self.writer, self.model, self.n_steps)
-                trainer.log_weight_norms(self.writer, self.model, self.n_steps)
+                log_grads(self.writer, self.model, self.n_steps)
+                log_weight_norms(self.writer, self.model, self.n_steps)
 
             if i % self.config.test_interval == 0:
                 self._evaluate_model()
@@ -167,7 +172,7 @@ class ChessTrainerRunner:
     @torch.no_grad()
     def _evaluate_model(self):
         self.model.eval()
-        testing_model.eval_legal_moves_and_log(
+        eval_legal_moves_and_log(
             self.model,
             self.encoder,
             self.writer,

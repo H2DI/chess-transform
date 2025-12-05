@@ -1,10 +1,9 @@
+import numpy as np
+
 import torch
 from torch.utils.data import IterableDataset
-
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
-
-import numpy as np
 
 
 class ChessDataset(IterableDataset):

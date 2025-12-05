@@ -1,7 +1,7 @@
 import random
 import torch
 
-import chess_seq.utils as utils
+import chess_seq.chess_seq.utils as utils
 from chess_seq.tictactoe import mechanics
 from chess_seq.tictactoe.game_engine import TTTGameEngine
 from chess_seq.tictactoe.mechanics import TTTBoard

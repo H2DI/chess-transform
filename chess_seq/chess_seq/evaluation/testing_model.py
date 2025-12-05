@@ -1,8 +1,7 @@
 import torch
 import chess
 
-from chess_seq.training.trainer import log_stat_group
-from chess_seq.game_engine import ChessGameEngine
+from ..game_engine import ChessGameEngine
 
 
 @torch.no_grad()
@@ -58,14 +57,3 @@ def test_first_moves(model, encoder, n_plies=30, prints=False):
         all_number_of_bad_plies.append(len(bad_plies))
         all_first_bad_plies.append(bad_plies[0] if bad_plies else len(game.move_stack))
     return all_number_of_bad_plies, all_first_bad_plies
-
-
-def eval_legal_moves_and_log(model, encoder, writer, n_games, lengths):
-    engine = ChessGameEngine(model, encoder)
-    sequence = engine.generate_sequence()
-    print(f"Sample game: {encoder.inverse_transform(sequence)}")
-
-    for n_plies in lengths:
-        n_bad, t_first_bad = test_first_moves(model, encoder, n_plies=n_plies)
-        log_stat_group(writer, f"Play{n_plies}/NumberOfBadMoves", n_bad, n_games)
-        log_stat_group(writer, f"Play{n_plies}/FirstBadMoves", t_first_bad, n_games)

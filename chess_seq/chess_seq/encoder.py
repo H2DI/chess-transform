@@ -5,8 +5,6 @@ from itertools import product
 import pickle
 import numpy as np
 
-from sklearn.preprocessing import LabelEncoder
-
 
 class InvalidMove(Exception):
     """Exception raised for invalid chess moves."""
@@ -14,7 +12,7 @@ class InvalidMove(Exception):
     pass
 
 
-class MoveEncoder(LabelEncoder):
+class MoveEncoder:
     def __init__(self):
         super().__init__()
         self.start_token = "<start>"

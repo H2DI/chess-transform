@@ -2,12 +2,13 @@ import os
 import re
 import torch
 
-import chess_seq.models as models
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
+
+from .models import ChessNet
 
 
 def build_and_save_model(model_config):
-    model = models.ChessNet(config=model_config)
+    model = ChessNet(config=model_config)
     base_checkpoint = {
         "model_config": model_config,
         "model_state_dict": model.state_dict(),
@@ -58,7 +59,6 @@ def clone_model(model: torch.nn.Module, requires_grad=False) -> torch.nn.Module:
 def load_model(model_name, number=None, special_name=None):
     """
     Loads model for inference.
-    Return model, encoder, checkpoint
     """
     if special_name is None:
         if number is None:
@@ -73,7 +73,7 @@ def load_model(model_name, number=None, special_name=None):
     print(f"Loading model from {checkpoint_path}")
 
     model_config = checkpoint["model_config"]
-    model = models.ChessNet(config=model_config)
+    model = ChessNet(config=model_config)
     sd = checkpoint["model_state_dict"]
     consume_prefix_in_state_dict_if_present(sd, "_orig_mod.")
 

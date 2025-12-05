@@ -4,8 +4,7 @@ import os
 
 import numpy as np
 
-from chess_seq.encoder import MoveEncoder
-import chess_seq.data.preprocessing as preprocessing
+from ..encoder import MoveEncoder
 
 
 def save_shard(shard_path, game_ids, tokens):
@@ -90,4 +89,4 @@ if __name__ == "__main__":
     input_folder = args.pgn_in
     output_folder = args.npz_out
 
-    preprocessing.run_through_folder(input_folder, output_folder, encoder)
+    run_through_folder(input_folder, output_folder, encoder)

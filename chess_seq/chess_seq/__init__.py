@@ -2,8 +2,8 @@ from .encoder import MoveEncoder, InvalidMove
 from .models import ChessNet
 from .game_engine import ChessGameEngine
 from .training.trainer_runner import ChessTrainerRunner
-from .data.datasets import ChessDataset, build_dataloader
-from .utils import build_and_save_model, load_model, clone_model, get_latest_checkpoint
+from .datasets.datasets import ChessDataset, build_dataloader
+from .utils import load_model, clone_model, get_latest_checkpoint
 
 __all__ = [
     "MoveEncoder",
@@ -13,7 +13,6 @@ __all__ = [
     "ChessTrainerRunner",
     "ChessDataset",
     "build_dataloader",
-    "build_and_save_model",
     "load_model",
     "clone_model",
     "get_latest_checkpoint",
