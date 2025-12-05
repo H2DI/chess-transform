@@ -6,29 +6,27 @@ from chess_seq import ChessGameEngine, MoveEncoder
 import chess_seq.utils as utils
 import chess
 
-import configs
+import argparse
 
 
 with open("private_token.json") as f:
     token = json.load(f)["lichessApiToken"]
 
-config = configs.ModelConfig()
-model_name = config.name
 
-study_id = "ZB0upGx"
-study_id = "jGATtknM"
-study_id = "LdUHTfjo"  # ada_chuk
-
-study_id = "ZbXAbPvL"
+# study_id = "ZB0upGx"
+# study_id = "jGATtknM"
+# study_id = "LdUHTfjo"  # ada_chuk
+STUDY_ID = "ZbXAbPvL"
+ENCODER_PATH = "data/move_encoder.pkl"
 
 
-def publish_game(model_name, study_id):
-    model, _, info = utils.load_model(model_name)
+def publish_game(model_name, study_id, checkpoint_name=None):
+    model, _, info = utils.load_model(model_name, special_name=checkpoint_name)
     model.to(torch.device("cpu"))
     n_games = info["n_games"]
 
     encoder = MoveEncoder()
-    encoder.load(config.encoder_path)
+    encoder.load(ENCODER_PATH)
 
     engine = ChessGameEngine(model, encoder)
     game = chess.Board()
@@ -73,4 +71,15 @@ def publish_game(model_name, study_id):
 
 
 if __name__ == "__main__":
-    publish_game(model_name, study_id)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_name", required=True, help="Name of the model to load")
+    parser.add_argument(
+        "--checkpoint_name",
+        required=True,
+        help="Checkpoint name or path to use",
+    )
+    args = parser.parse_args()
+
+    model_name = args.model_name
+    checkpoint_name = args.checkpoint_name
+    publish_game(model_name, STUDY_ID, checkpoint_name=checkpoint_name)

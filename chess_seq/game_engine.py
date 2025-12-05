@@ -24,10 +24,11 @@ class ChessGameEngine:
         chess game
         """
         model = self.model
-        device = self.device
 
         if sequence is None:
-            sequence = torch.tensor(np.array([[self.start_token_id]]), device=device)
+            sequence = torch.tensor(
+                np.array([[self.start_token_id]]), device=self.device
+            )
         for _ in range(n_plies):
             out = model(sequence)  # B, T, vocab_size
             next_id = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
@@ -67,9 +68,7 @@ class ChessGameEngine:
         bad_plies = []
 
         for _ in range(n_plies):
-            token_id, ended = self._generate_next_token_id(sequence, greedy=greedy)
-            if ended:
-                break
+            token_id = self._generate_next_token_id(sequence, greedy=greedy)
             current_ply += 1
             game, node, bad_plies, sequence = self._play_move_or_fallback(
                 token_id,
@@ -92,11 +91,9 @@ class ChessGameEngine:
             next_token_id = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
         else:
             logits = out[0, -1]
-            if no_end:
-                logits[0] = float("-inf")
             dist = torch.distributions.Categorical(logits=logits)
             next_token_id = dist.sample().unsqueeze(0).unsqueeze(0)
-        return next_token_id, False
+        return next_token_id
 
     def _play_move_or_fallback(
         self,
@@ -118,12 +115,11 @@ class ChessGameEngine:
 
         if not played_proposed_move:
             bad_plies.append(current_ply)
-            token_id = np.array([[self.encoder.move_to_id(true_move_played)]])
+            token_id = torch.tensor(
+                [[self.encoder.move_to_id(true_move_played)]], device=self.device
+            )
 
-        sequence = torch.cat(
-            (sequence, torch.tensor(token_id, device=self.device)),
-            dim=1,
-        )
+        sequence = torch.cat((sequence, token_id), dim=1)
         return game, node, bad_plies, sequence
 
     @torch.no_grad()

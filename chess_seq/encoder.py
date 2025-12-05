@@ -109,9 +109,12 @@ class MoveEncoder(LabelEncoder):
     def token_to_move(self, token):
         """Convert a move from the encoder format to chess.Move."""
         if token == self.start_token:
+            # return "Start"
             return None
         elif token == self.end_token:
+            # return "End"
             return None
+
         else:
             from_string, to_string, promo_string = token[:2], token[2:4], token[4:]
             from_square = chess.parse_square(from_string)
