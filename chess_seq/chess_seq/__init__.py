@@ -3,6 +3,7 @@ from .models import ChessNet
 from .game_engine import ChessGameEngine
 from .training.trainer_runner import ChessTrainerRunner
 from .datasets.datasets import ChessDataset, build_dataloader
+from .configs import ModelConfig
 from .utils import load_model, clone_model, get_latest_checkpoint
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "load_model",
     "clone_model",
     "get_latest_checkpoint",
+    "ModelConfig",
 ]
 
 __version__ = "0.0.0"

@@ -24,7 +24,9 @@ def build_and_save_model(model_config):
 
 
 def get_latest_checkpoint(model_name, base_name="checkpoint"):
-    model_dir = f"checkpoints/{model_name}/"
+    script_path = os.path.realpath(__file__)
+    repo_path = os.path.dirname(os.path.dirname(script_path))
+    model_dir = repo_path + f"checkpoints/{model_name}/"
     pattern = re.compile(base_name + r"_(\d+)\.pth")
 
     max_suffix = -1
@@ -60,13 +62,20 @@ def load_model(model_name, number=None, special_name=None):
     """
     Loads model for inference.
     """
+
+    script_path = os.path.realpath(__file__)
+    repo_path = os.path.dirname(os.path.dirname(os.path.dirname(script_path)))
+    print(f"Repository path: {repo_path}")
+
     if special_name is None:
         if number is None:
             checkpoint_path = get_latest_checkpoint(model_name)
         else:
-            checkpoint_path = f"checkpoints/{model_name}/checkpoint_{number}.pth"
+            checkpoint_path = (
+                repo_path + f"/checkpoints/{model_name}/checkpoint_{number}.pth"
+            )
     else:
-        checkpoint_path = f"checkpoints/{model_name}/{special_name}.pth"
+        checkpoint_path = repo_path + f"/checkpoints/{model_name}/{special_name}.pth"
     checkpoint = torch.load(
         checkpoint_path, map_location=torch.device("cpu"), weights_only=False
     )
