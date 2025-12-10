@@ -1,10 +1,12 @@
 import os
 import re
+import sys
 import torch
 
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 
 from .models import ChessNet
+import chess_seq.configs as _cs_configs
 
 
 def build_and_save_model(model_config):
@@ -62,6 +64,10 @@ def load_model(model_name, number=None, special_name=None):
     """
     Loads model for inference.
     """
+
+    # Older checkpoints were pickled with top-level module name "configs".
+    # Register an alias to the current chess_seq.configs so torch.load can resolve it.
+    sys.modules.setdefault("configs", _cs_configs)
 
     script_path = os.path.realpath(__file__)
     repo_path = os.path.dirname(os.path.dirname(os.path.dirname(script_path)))

@@ -1,42 +1,36 @@
-# Transformers for sequences of chess moves
+# Chess Transformers
 
-Pytorch (re-)implementation of Transformer models to predict sequences of chess moves. 
-Current version is pure imitation learning (next-token prediction), with no notion of
- reward for good/valid moves.
+A PyTorch implementation of Transformer models for predicting chess move sequences. The current version uses imitation learning (next-token prediction) without explicit reward modeling for move quality or validity.
 
-### Model
-Architecture is a reimplementation of QWEN3 0.6B. 
+## Model
 
-(~450M params with our vocab size)
+The architecture is a reimplementation of Qwen 3 0.6B.
 
-Tokens: 'From x To x Promotion' (e.g. 'e2e4', 'f8g6', 'e7e8pq') 
-(4608 possible tokens + 'start' + 'end' + 'pad')
+- **Parameters**: Approximately 450M (adjusted for vocabulary size).
+- **Tokens**: Move format 'FromToPromotion' (e.g., 'e2e4', 'f8g6', 'e7e8pq').
+- **Vocabulary**: 4608 move tokens plus start, end, and pad tokens.
 
-### Data
-[Lichess Elite](https://database.nikonoel.fr/) database. 
-Total number of games: 12,421,396
-Total number of tokens: 1,102,678,752 
+## Data
 
+Training data is sourced from the [Lichess Elite Database](https://database.nikonoel.fr/).
 
-### Results
-Trained on an A100. 
+- **Total Games**: 12,421,396
+- **Total Tokens**: 1,102,678,752
 
-Some sample games played against itself [here](https://lichess.org/study/ZbXAbPvL).
+## Results
 
-You might be able to play against the bot on [its lichess account](https://lichess.org/@/GambaRossa/all) .
-Illegal moves are masked at inference.
+The model was trained on an NVIDIA A100 GPU. Illegal moves are masked during inference.
 
+- View sample games played by the model against itself [here](https://lichess.org/study/ZbXAbPvL).
+- Play against the bot on Lichess: [GambaRossa](https://lichess.org/@/GambaRossa/all).
 
+## Future Work
 
-
-
-### Future
-
-Minor
+- Experiments: length generalization, extracting the chess world model.
 
 
-Big
-Improvement by self-play
+- Fine-tuning on high-quality games
+- Self-play reinforcement learning. GRPO is implemented but needs refinement.
 
 
 
