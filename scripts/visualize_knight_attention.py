@@ -223,8 +223,8 @@ def plot_knight_attention(
 ):
     # Convert ply indices to token positions (start token at 0, move i at i+1)
     token_positions = [p + 1 for p in plies if p + 1 < len(seq)]
-    if not token_positions:
-        raise ValueError("No valid knight plies within truncated sequence to plot.")
+    # If there are no token positions (selected piece never moved in truncated sequence),
+    # continue plotting but without drawing vertical/horizontal markers.
 
     # If requested, create a single combined attention plot (average across layers)
     if single_plot:
@@ -467,7 +467,9 @@ def main():
     game = load_game_at_index(Path(args.pgn), args.game_index)
     plies = track_piece_plies(game, args.piece)
     if not plies:
-        raise ValueError(f"The piece on {args.piece} never moved in this game.")
+        print(
+            f"[warn] The piece on {args.piece} never moved in this game — plotting without markers."
+        )
 
     seq = encode_game(game, encoder, max_tokens=args.max_tokens)
     # Build SAN labels aligned with token indices: index 0 = <start>, index i>=1 = move i-1
