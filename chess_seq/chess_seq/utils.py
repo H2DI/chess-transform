@@ -27,8 +27,8 @@ def build_and_save_model(model_config):
 
 def get_latest_checkpoint(model_name, base_name="checkpoint"):
     script_path = os.path.realpath(__file__)
-    repo_path = os.path.dirname(os.path.dirname(script_path))
-    model_dir = repo_path + f"checkpoints/{model_name}/"
+    repo_path = os.path.dirname(os.path.dirname(os.path.dirname(script_path)))
+    model_dir = repo_path + f"/checkpoints/{model_name}/"
     pattern = re.compile(base_name + r"_(\d+)\.pth")
 
     max_suffix = -1
