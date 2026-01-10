@@ -4,13 +4,14 @@ import sys
 from dataclasses import dataclass, field
 from typing import List
 
-ROOT = os.path.dirname(os.path.dirname(__file__))
-sys.path.append(ROOT)
 
 from configs import ModelConfig, TrainingSession, TrainingConfig
 from chess_seq import ChessNet, ChessTrainerRunner, build_dataloader
 
 from tqdm import tqdm
+
+ROOT = os.path.dirname(os.path.dirname(__file__))
+sys.path.append(ROOT)
 
 # Smoke test the model initialization
 

@@ -58,7 +58,7 @@ class RoPE(nn.Module):
 
 class GQARope(nn.Module):
     """
-    Group query attention with QK normalization
+    Group query attention with QK normalization.
     """
 
     def __init__(self, k, head_dim, heads=16, groups=2, dropout=0.0):
@@ -153,7 +153,7 @@ class DecoderLayer(nn.Module):
 class ChessNet(nn.Module):
     def __init__(self, config=ModelConfig):
         """
-        Copy of Qwen3
+        After Qwen 3
         """
         super().__init__()
         self.config = config
