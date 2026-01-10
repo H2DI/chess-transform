@@ -3,7 +3,7 @@ import requests
 import torch
 
 from chess_seq import ChessGameEngine, MoveEncoder
-import chess_seq.chess_seq.utils as utils
+import chess_seq.utils as utils
 import chess
 
 import argparse

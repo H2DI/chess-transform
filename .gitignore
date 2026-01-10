@@ -170,11 +170,15 @@ data/.DS_Store
 /runs
 private_token.json
 working.ipynb
-configs.py
 synthetic_games/*
 logs/*
 test.py
-configs.py
 /configs
 config.py
 scripts/build_testing_npz.py
+todo.md
+reports/
+
+# Local config files (use configs.example.py as template)
+configs.py
+scripts/configs.py

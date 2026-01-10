@@ -1,0 +1,15 @@
+# Core dependencies
+torch>=2.4.0
+numpy>=1.24.0
+
+# Chess
+python-chess>=1.999
+
+# Data processing
+tqdm>=4.65.0
+
+# Visualization (optional)
+matplotlib>=3.7.0
+
+# Development
+pytest>=7.0.0

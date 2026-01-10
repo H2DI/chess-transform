@@ -12,11 +12,11 @@ import os
 import torch
 import json
 
-from chess_seq.chess_seq.models import ChessNet
-from chess_seq.chess_seq.encoder import MoveEncoder
-from chess_seq.chess_seq.evaluation.probes import create_probe
-from chess_seq.chess_seq.evaluation.probe_training import ProbeDataset, train_probe
-from chess_seq.chess_seq import utils
+from chess_seq.models import ChessNet
+from chess_seq.encoder import MoveEncoder
+from chess_seq.evaluation.probes import create_probe
+from chess_seq.evaluation.probe_training import ProbeDataset, train_probe
+from chess_seq import utils
 
 
 def parse_args():

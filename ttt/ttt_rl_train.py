@@ -13,7 +13,7 @@ from chess_seq.tictactoe.evaluation import full_eval
 
 from torch.utils.tensorboard import SummaryWriter
 
-import chess_seq.chess_seq.utils as utils
+import chess_seq.utils as utils
 from config import GRPOConfig, ModelConfig
 
 import json

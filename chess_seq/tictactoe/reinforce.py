@@ -6,7 +6,7 @@ import torch.optim as optim
 
 import chess_seq.tictactoe.mechanics as mechanics
 from chess_seq.tictactoe.agent import TTTAgent
-import chess_seq.chess_seq.utils as utils
+import chess_seq.utils as utils
 
 
 class REINFORCE(TTTAgent):

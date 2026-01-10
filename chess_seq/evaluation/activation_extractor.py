@@ -260,8 +260,8 @@ if __name__ == "__main__":
     import sys
 
     sys.path.append("/Users/hadiji/Documents/GitHub/chess-transform")
-    from chess_seq.chess_seq.models import ChessNet
-    from chess_seq.chess_seq.configs import ModelConfig
+    from chess_seq.models import ChessNet
+    from chess_seq.configs import ModelConfig
 
     # Create a small test model
     config = ModelConfig(

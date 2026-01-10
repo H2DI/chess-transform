@@ -15,10 +15,10 @@ import argparse
 import torch
 import os
 import chess_seq.configs as cs
-from chess_seq.chess_seq import utils
-from chess_seq.chess_seq.encoder import MoveEncoder
-from chess_seq.chess_seq.evaluation.probes import create_probe
-from chess_seq.chess_seq.evaluation.probe_training import ProbeDataset, evaluate_probe
+from chess_seq import utils
+from chess_seq.encoder import MoveEncoder
+from chess_seq.evaluation.probes import create_probe
+from chess_seq.evaluation.probe_training import ProbeDataset, evaluate_probe
 
 
 def parse_args():
