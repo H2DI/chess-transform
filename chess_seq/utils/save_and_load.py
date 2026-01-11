@@ -101,7 +101,7 @@ def load_model_from_safetensors(model_name):
 
 def load_model_from_hf(
     repo_id: str = None,
-    model_name: str = "chess-transform-gamba-rossa",
+    model_name: str = "gamba_rossa",
     force_download: bool = False,
 ):
     """
