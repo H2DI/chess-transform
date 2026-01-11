@@ -4,14 +4,13 @@ def test_top_level_imports():
     # These imports should succeed from the top-level shim
     from chess_seq import (
         MoveEncoder,
-        InvalidMove,
         ChessNet,
         ModelConfig,
         ChessGameEngine,
         ChessDataset,
         build_dataloader,
         build_and_save_model,
-        load_model,
+        load_model_from_checkpoint,
         clone_model,
         get_latest_checkpoint,
     )
@@ -24,6 +23,6 @@ def test_top_level_imports():
     assert callable(ChessDataset)
     assert callable(build_dataloader)
     assert callable(build_and_save_model)
-    assert callable(load_model)
+    assert callable(load_model_from_checkpoint)
     assert callable(clone_model)
     assert callable(get_latest_checkpoint)

@@ -13,7 +13,7 @@ from chess_seq.tictactoe.evaluation import full_eval
 
 from torch.utils.tensorboard import SummaryWriter
 
-import chess_seq.utils as utils
+import chess_seq.utils.save_and_load as save_and_load
 from config import GRPOConfig, ModelConfig
 
 import json
@@ -44,10 +44,12 @@ if __name__ == "__main__":
     device = torch.device(session_config.device_str)
     if session_config.new_model:
         model_config = ModelConfig(name=session_config.model_name)
-        model = utils.build_and_save_model(model_config)
+        model = save_and_load.build_and_save_model(model_config)
         base_name = f"{model_config.name}_GRPO"
     else:
-        model, model_config, info = utils.load_model(session_config.model_name)
+        model, model_config, info = save_and_load.load_model_from_checkpoint(
+            session_config.model_name
+        )
         base_name = f"{model_config.name}_{info['n_games']}"
 
     with open(model_config.encoder_path, "rb") as f:

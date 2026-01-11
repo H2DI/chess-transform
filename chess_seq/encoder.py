@@ -2,7 +2,10 @@ import chess
 import chess.pgn
 
 from itertools import product
-import pickle
+
+import json
+from pathlib import Path
+
 import numpy as np
 
 
@@ -30,13 +33,16 @@ class MoveEncoder:
         print("MoveEncoder built with vocabulary size:", len(self.id_to_token))
 
     def save(self, path):
-        with open(path, "wb") as f:
-            pickle.dump(self.id_to_token, f)
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(self.id_to_token, f, ensure_ascii=False, separators=(",", ":"))
         print(f"Saved MoveEncoder id_to_token to {path}")
 
     def load(self, path):
-        with open(path, "rb") as f:
-            self.id_to_token = pickle.load(f)
+        path = Path(path)
+        with path.open("r", encoding="utf-8") as f:
+            self.id_to_token = json.load(f)
         self.token_to_id = {t: i for i, t in enumerate(self.id_to_token)}
         self.start_token_id = self.token_to_id[self.start_token]
         self.end_token_id = self.token_to_id[self.end_token]
@@ -133,9 +139,10 @@ class MoveEncoder:
 if __name__ == "__main__":
     move_encoder = MoveEncoder()
     move_encoder.build()
-    # move_encoder.save("data/move_encoder.pkl")
+    move_encoder.save("data/id_to_token.json")
+    move_encoder.load("data/id_to_token.json")
 
     print("Number of tokens:", len(move_encoder.id_to_token))
     print(move_encoder.token_to_id["e2e4"])
     print(move_encoder.token_to_id["e7e8pq"])
-    print(move_encoder.id_to_token[4500])
+    print(move_encoder.id_to_token[4405])

@@ -6,7 +6,7 @@ import torch.optim as optim
 
 import chess_seq.tictactoe.mechanics as mechanics
 from chess_seq.tictactoe.agent import TTTAgent
-import chess_seq.utils as utils
+import chess_seq.utils.save_and_load as save_and_load
 
 
 class REINFORCE(TTTAgent):
@@ -111,7 +111,7 @@ class REINFORCE(TTTAgent):
         return torch.tensor(returns_list[::-1])  # , dtype=torch.float32)
 
     def load_rl_checkpoint(self):
-        checkpoint_path = utils.get_latest_checkpoint(self.full_name)
+        checkpoint_path = save_and_load.get_latest_checkpoint(self.full_name)
 
         rl_checkpoint = torch.load(
             checkpoint_path,

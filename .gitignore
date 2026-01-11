@@ -161,24 +161,19 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-data/.DS_Store
+private_token.json
+
+*.DS_Store
 *.pgn
-.DS_Store
 *.pth
 /checkpoints
 /data
 /runs
-private_token.json
 working.ipynb
 synthetic_games/*
 logs/*
 test.py
-/configs
-config.py
 scripts/build_testing_npz.py
 todo.md
 reports/
 
-# Local config files (use configs.example.py as template)
-configs.py
-scripts/configs.py

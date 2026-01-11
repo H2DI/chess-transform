@@ -5,7 +5,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
-from .. import utils
+from ..utils import save_and_load
 
 from ..datasets.datasets import build_dataloader
 from ..models import ChessNet
@@ -62,7 +62,7 @@ class ChessTrainerRunner:
         )
 
     def _load_checkpoint(self):
-        checkpoint_path = utils.get_latest_checkpoint(self.model_name)
+        checkpoint_path = save_and_load.get_latest_checkpoint(self.model_name)
         checkpoint = torch.load(
             checkpoint_path,
             map_location="cpu",
@@ -94,7 +94,7 @@ class ChessTrainerRunner:
         self.file_number = training_state["file_number"]
 
     def _initialize_new_model(self):
-        self.model = utils.build_and_save_model(self.model_config)
+        self.model = save_and_load.build_and_save_model(self.model_config)
         self.model = self.model.to(self.device)
         if self.config.jit:
             self.model = torch.compile(self.model)

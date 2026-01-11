@@ -13,3 +13,7 @@ matplotlib>=3.7.0
 
 # Development
 pytest>=7.0.0
+# Safe tensor format for HF uploads
+safetensors>=0.3.0
+# Hugging Face Hub for model downloading
+huggingface_hub>=0.20.0

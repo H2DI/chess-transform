@@ -15,7 +15,7 @@ import argparse
 import torch
 import os
 import chess_seq.configs as cs
-from chess_seq import utils
+from chess_seq.utils import save_and_load
 from chess_seq.encoder import MoveEncoder
 from chess_seq.evaluation.probes import create_probe
 from chess_seq.evaluation.probe_training import ProbeDataset, evaluate_probe
@@ -66,10 +66,12 @@ def main():
     # Load chess model (final)
     print("\nLoading ChessNet model...")
     try:
-        model, mc, info = utils.load_model(model_name, special_name="final")
+        model, mc, info = save_and_load.load_model_from_checkpoint(
+            model_name, special_name="final"
+        )
     except Exception:
         # fallback: try without special_name
-        model, mc, info = utils.load_model(model_name)
+        model, mc, info = save_and_load.load_model_from_checkpoint(model_name)
     model = model.to(device)
     model.eval()
 

@@ -16,7 +16,7 @@ import torch
 
 from chess_seq.models import ChessNet
 from chess_seq.encoder import MoveEncoder
-from chess_seq import utils
+from chess_seq.utils import save_and_load
 from chess_seq.evaluation.probes import create_probe
 from chess_seq.evaluation.probe_training import (
     ProbeDataset,
@@ -145,20 +145,24 @@ def load_model_for_probe(
     if checkpoint_path is None:
         # Load latest checkpoint or final model
         try:
-            model, model_config, info = utils.load_model(
+            model, model_config, info = save_and_load.load_model_from_checkpoint(
                 model_name, special_name="final"
             )
         except FileNotFoundError:
             # If 'final' doesn't exist, try loading the latest checkpoint
-            model, model_config, info = utils.load_model(model_name)
+            model, model_config, info = save_and_load.load_model_from_checkpoint(
+                model_name
+            )
     else:
         # Load specific checkpoint by parsing the path
         filename = os.path.basename(checkpoint_path).replace(".pth", "")
         if filename.startswith("checkpoint_"):
             number = int(filename.split("_")[1])
-            model, model_config, info = utils.load_model(model_name, number=number)
+            model, model_config, info = save_and_load.load_model_from_checkpoint(
+                model_name, number=number
+            )
         else:
-            model, model_config, info = utils.load_model(
+            model, model_config, info = save_and_load.load_model_from_checkpoint(
                 model_name, special_name=filename
             )
 

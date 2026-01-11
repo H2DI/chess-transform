@@ -1,7 +1,7 @@
 import random
 import torch
 
-import chess_seq.utils as utils
+import chess_seq.utils.save_and_load as save_and_load
 from chess_seq.tictactoe import mechanics
 from chess_seq.tictactoe.game_engine import TTTGameEngine
 from chess_seq.tictactoe.mechanics import TTTBoard
@@ -62,7 +62,7 @@ class TTTAgent:
 
     def load_checkpoint(self, checkpoint_name=None):
         if checkpoint_name is None:
-            checkpoint_path = utils.get_latest_checkpoint(self.full_name)
+            checkpoint_path = save_and_load.get_latest_checkpoint(self.full_name)
         else:
             checkpoint_path = f"checkpoints/{self.full_name}/{checkpoint_name}.pth"
 

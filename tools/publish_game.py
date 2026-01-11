@@ -3,7 +3,7 @@ import requests
 import torch
 
 from chess_seq import ChessGameEngine, MoveEncoder
-import chess_seq.utils as utils
+import chess_seq.utils.save_and_load as save_and_load
 import chess
 
 import argparse
@@ -21,7 +21,9 @@ ENCODER_PATH = "data/move_encoder.pkl"
 
 
 def publish_game(model_name, study_id, checkpoint_name=None, mask_illegal=False):
-    model, _, info = utils.load_model(model_name, special_name=checkpoint_name)
+    model, _, info = save_and_load.load_model_from_checkpoint(
+        model_name, special_name=checkpoint_name
+    )
     model.to(torch.device("cpu"))
     n_games = info["n_games"]
 

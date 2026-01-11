@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 
-import chess_seq.utils as utils
+import chess_seq.utils.save_and_load as save_and_load
 from chess_seq.tictactoe.mechanics import TTTBoard
 from chess_seq.tictactoe.players import NNPlayer
 
@@ -88,7 +88,7 @@ class TTTGui:
 
 
 if __name__ == "__main__":
-    model, encoder, _ = utils.load_model(
+    model, encoder, _ = save_and_load.load_model_from_checkpoint(
         "ttt_large_573440_GRPO", special_name="no_loss"
     )
     player = NNPlayer(model, encoder, mask_illegal=True)

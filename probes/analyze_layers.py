@@ -16,7 +16,7 @@ from chess_seq.models import ChessNet
 from chess_seq.encoder import MoveEncoder
 from chess_seq.evaluation.probes import create_probe
 from chess_seq.evaluation.probe_training import ProbeDataset, train_probe
-from chess_seq import utils
+from chess_seq.utils import save_and_load
 
 
 def parse_args():
@@ -81,7 +81,7 @@ def main():
     print("LOADING MODEL")
     print("=" * 60)
 
-    checkpoint_path = utils.get_latest_checkpoint(args.model_name)
+    checkpoint_path = save_and_load.get_latest_checkpoint(args.model_name)
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
     model_config = checkpoint["model_config"]

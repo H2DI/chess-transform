@@ -18,7 +18,7 @@ import torch
 from tqdm.auto import tqdm
 
 from chess_seq import MoveEncoder
-from chess_seq import load_model
+from chess_seq import load_model_from_checkpoint
 
 matplotlib.use("Agg")
 
@@ -455,7 +455,7 @@ def main():
     args = parse_args()
     device = torch.device(args.device)
 
-    model, model_config, _ = load_model(
+    model, model_config, _ = load_model_from_checkpoint(
         model_name=args.model_name,
         special_name=args.special_name,
     )
