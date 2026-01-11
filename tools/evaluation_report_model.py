@@ -17,5 +17,5 @@ Outputs:
 from chess_seq import ChessGameEngine, load_model_from_hf
 from chess_seq.evaluation.model_basic_eval import test_first_moves
 
-model, config, encoder = load_model_from_hf("gamba_rossa")
+model, config, encoder = load_model_from_hf()
 test_first_moves(model, encoder, n_plies=30, prints=True)
