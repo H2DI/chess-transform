@@ -14,11 +14,9 @@ import argparse
 import os
 import torch
 
-from chess_seq.models import ChessNet
-from chess_seq.encoder import MoveEncoder
-from chess_seq.utils import save_and_load
-from chess_seq.evaluation.probes import create_probe
-from chess_seq.evaluation.probe_training import (
+from chess_seq import ChessNet, MoveEncoder, save_and_load
+from chess_seq.evaluation.probes.probes import create_probe
+from chess_seq.evaluation.probes.probe_training import (
     ProbeDataset,
     train_probe,
     evaluate_probe,

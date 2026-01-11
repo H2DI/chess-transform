@@ -14,8 +14,8 @@ import json
 
 from chess_seq.models import ChessNet
 from chess_seq.encoder import MoveEncoder
-from chess_seq.evaluation.probes import create_probe
-from chess_seq.evaluation.probe_training import ProbeDataset, train_probe
+from chess_seq.evaluation.probes.probes import create_probe
+from chess_seq.evaluation.probes.probe_training import ProbeDataset, train_probe
 from chess_seq.utils import save_and_load
 
 

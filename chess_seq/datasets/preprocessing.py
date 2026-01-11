@@ -78,15 +78,16 @@ def run_through_folder(input_folder, output_folder, encoder):
 
 
 if __name__ == "__main__":
-    encoder = MoveEncoder()
-    encoder.load("data/move_encoder.pkl")
-
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--encoder_path", type=str, default="checkpoints/gamba_ross/id_to_token.json"
+    )
     parser.add_argument("--pgn_in", type=str, default="")
     parser.add_argument("--npz_out", type=str, default="")
     args = parser.parse_args()
 
     input_folder = args.pgn_in
     output_folder = args.npz_out
+    encoder = MoveEncoder().load(args.encoder_path)
 
     run_through_folder(input_folder, output_folder, encoder)

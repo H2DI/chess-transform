@@ -6,6 +6,7 @@ Runs a small-scale probe training experiment to verify everything works.
 import torch
 import sys
 import os
+import chess
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -14,9 +15,11 @@ from chess_seq.models import ChessNet
 from chess_seq.encoder import MoveEncoder
 from chess_seq.configs import ModelConfig
 from chess_seq.evaluation.probes import LinearProbe, MLPProbe
-from chess_seq.evaluation.activation_extractor import (
+from chess_seq.evaluation.probes.activation_extractor import (
     extract_layer_activations,
 )
+
+from chess_seq.evaluation.probes.position_encoder import BoardPositionEncoder
 
 
 def test_components():
@@ -27,8 +30,6 @@ def test_components():
 
     # 1. Test Position Encoder
     print("\n1. Testing Position Encoder...")
-    from chess_seq.evaluation.position_encoder import BoardPositionEncoder
-    import chess
 
     pos_encoder = BoardPositionEncoder()
     board = chess.Board()
@@ -136,9 +137,6 @@ def demo_position_encoding():
     print("\n" + "=" * 60)
     print("DEMO: Position Encoding")
     print("=" * 60)
-
-    from chess_seq.evaluation.position_encoder import BoardPositionEncoder
-    import chess
 
     pos_encoder = BoardPositionEncoder()
 

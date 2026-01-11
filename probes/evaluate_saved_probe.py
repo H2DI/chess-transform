@@ -17,8 +17,8 @@ import os
 import chess_seq.configs as cs
 from chess_seq.utils import save_and_load
 from chess_seq.encoder import MoveEncoder
-from chess_seq.evaluation.probes import create_probe
-from chess_seq.evaluation.probe_training import ProbeDataset, evaluate_probe
+from chess_seq.evaluation.probes.probes import create_probe
+from chess_seq.evaluation.probes.probe_training import ProbeDataset, evaluate_probe
 
 
 def parse_args():
