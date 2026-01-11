@@ -182,7 +182,7 @@ class TestHuggingFaceEndToEnd:
 
     def test_evaluate_first_moves(self, model_and_encoder):
         """Test model's response to all 20 first moves."""
-        from chess_seq.evaluation.testing_model import test_first_moves
+        from chess_seq.evaluation.model_basic_eval import test_first_moves
 
         model, config, encoder, device = model_and_encoder
 

@@ -17,7 +17,6 @@ with open("private_token.json") as f:
 # study_id = "jGATtknM"
 # study_id = "LdUHTfjo"  # ada_chuk
 STUDY_ID = "ZbXAbPvL"
-ENCODER_PATH = "data/move_encoder.pkl"
 
 
 def publish_game(model_name, study_id, checkpoint_name=None, mask_illegal=False):
@@ -27,8 +26,7 @@ def publish_game(model_name, study_id, checkpoint_name=None, mask_illegal=False)
     model.to(torch.device("cpu"))
     n_games = info["n_games"]
 
-    encoder = MoveEncoder()
-    encoder.load(ENCODER_PATH)
+    encoder = MoveEncoder().load(f"checkpoints/{model_name}/id_to_token.json")
 
     engine = ChessGameEngine(model, encoder)
     game = chess.Board()

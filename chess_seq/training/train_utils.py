@@ -3,7 +3,7 @@ from torch import nn
 
 from ..configs import TrainingConfig
 from ..game_engine import ChessGameEngine
-from ..evaluation.testing_model import test_first_moves
+from ..evaluation.model_basic_eval import test_first_moves
 
 
 def initialize_optimizer(training_config: TrainingConfig, model: nn.Module):
