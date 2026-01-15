@@ -75,7 +75,7 @@ class MoveEncoder:
         return self.token_to_id[self.move_to_token(move)]
 
     def id_to_move(self, id: np.int32):
-        return self.id_to_token[self.token_to_move(id)]
+        return self.token_to_move(self.id_to_token[id])
 
     def move_to_token(self, move):
         """Convert a chess.Move object to a token"""

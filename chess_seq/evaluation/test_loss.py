@@ -2,7 +2,6 @@ import torch
 import math
 
 import chess
-import torch.nn.functional as F
 from tqdm import tqdm
 
 from ..encoder import MoveEncoder
@@ -22,27 +21,34 @@ class Evaluator:
         self.encoder = encoder
         self.device = device or torch.device("cpu")
         self.data_npz_path = npz_path
-        self.model.to(device)
+        self.model.to(self.device)
 
         self.topk_list = [1, 3, 5, 10]
         self.topk_max = max(self.topk_list)
 
-    def compute_prediction_metrics_by_pos_bucket_parity(
+    @torch.no_grad()
+    def metrics_by_pos_bucket_parity(
         self,
         batch_size=32,
         pos_bins=(0, 20, 40, 60, 80, 100, 10**9),
         max_games=None,
     ):
-        # same dataloader behavior as your original code
+        """
+        Compute negative log-likelihood and topk scores of true tokens:
+        - per bins of plies
+        - per parity of plies
+        Returns a dictionary, with group labels.
+
+        """
+        pad = self.model.config.pad_index
         dl = build_dataloader(
             self.data_npz_path,
             batch_size=batch_size,
-            padding_value=4610,
+            padding_value=pad,
             max_length=500,
             shuffle=False,
             max_games=max_games,
         )
-        pad = self.model.config.pad_index
         criterion = torch.nn.CrossEntropyLoss(ignore_index=pad, reduction="none")
 
         topk_list = self.topk_list
@@ -128,41 +134,113 @@ class Evaluator:
         }
 
     @torch.no_grad()
-    def single_game_legality(self, seq):
+    def game_legality(self, seq: torch.Tensor):
         """
-        Returns positions of illegal moves predicted
+        Returns positions of illegal moves predicted in a batch.
+        Removes 'end_token' prediction.
         """
-        T = len(seq)
-        illegals = torch.zeros(T, dtyp=torch.bool)
-        board = chess.Board()
-        for t in range(T - 1):
-            current_game = seq[:t]
+        seq = seq.to(self.device)
+        pad = self.model.config.pad_index
 
-            # predicted next move
-            logits = self.model(current_game)
-            logits[self.encoder.end_token_id] = float("-inf")
-            predicted_id = torch.argmax(logits, dim=-1)
-            predicted_move = self.encoder.id_to_move(predicted_id)
+        x = seq[:, :-1]  # B, T
+        y = seq[:, 1:]  # B, T
 
-            illegals[t] = predicted_move in board.legal_moves
+        B, T = y.shape
 
-            # true next move
-            move = self.encoder.id_to_move(seq[t + 1])
-            board.push(move)
-        return illegals.cpu().numpy()
+        logits = self.model(x)  # B, T, V
+        logits = logits.clone()
+        logits[:, :, self.encoder.end_token_id] = float("-inf")
 
+        predicted_ids = logits.argmax(dim=-1)  # B, T
 
-# report in a json
-# compute perplexity
+        illegals = torch.zeros_like(y, dtype=torch.bool)
+        boards = [chess.Board() for _ in range(B)]
 
+        # Get special token ids to skip
+        start_id = self.encoder.start_token_id
+        end_id = self.encoder.end_token_id
 
-# todo:
+        for t in range(T):
+            for b in range(B):
+                true_id = int(y[b, t].item())
+                if true_id == pad or true_id == start_id or true_id == end_id:
+                    continue
 
-# 6000 games
-# compute perplexity
-# compute top 1, top 3, top 5, top 10
-# separate black and white
-# plot top 5 accuracy per ply bucket
+                pid = int(predicted_ids[b, t].item())
+                pmove = self.encoder.id_to_move(pid)
+                illegals[b, t] = pmove is None or pmove not in boards[b].legal_moves
 
+                tmove = self.encoder.id_to_move(true_id)
+                boards[b].push(tmove)
 
-# compute illegal moves in top1 in next 10 plies after 11, 22, 33 plies
+        return illegals
+
+    @torch.no_grad()
+    def compute_legality_metrics(
+        self,
+        batch_size=32,
+        pos_bins=(0, 20, 40, 60, 80, 100, 10**9),
+        max_games=None,
+    ):
+        """
+        Compute legality metrics across the dataset, bucketed by ply and parity.
+        Returns the percentage of legal moves predicted (greedy argmax).
+        """
+        pad = self.model.config.pad_index
+        dl = build_dataloader(
+            self.data_npz_path,
+            batch_size=batch_size,
+            padding_value=pad,
+            max_length=500,
+            shuffle=False,
+            max_games=max_games,
+        )
+
+        edges = torch.tensor(pos_bins, device=self.device, dtype=torch.long)
+        nb = len(pos_bins) - 1
+        G = nb * 2  # bucket x (even/odd)
+
+        illegal_sum = torch.zeros(G, device=self.device, dtype=torch.float64)
+        tok_sum = torch.zeros(G, device=self.device, dtype=torch.float64)
+
+        for seq in tqdm(dl, desc="Checking legality"):
+            illegals = self.game_legality(seq)  # [B, T]
+            seq = seq.to(self.device)
+            y = seq[:, 1:]
+            mask = y != pad
+
+            B, T = y.shape
+
+            # "ply index"
+            pos = torch.arange(1, T + 1, device=self.device).view(1, T).expand(B, T)
+
+            bucket = torch.bucketize(pos, edges[1:-1], right=False)  # 0..nb-1
+            group = bucket * 2 + (pos & 1)  # even/odd by position
+
+            g = group[mask].reshape(-1)
+            ill = illegals[mask].to(torch.float64).reshape(-1)
+
+            illegal_sum.scatter_add_(0, g, ill)
+            tok_sum.scatter_add_(0, g, torch.ones_like(ill))
+
+        eps = 1e-12
+        legality_per_group = 1.0 - (illegal_sum / (tok_sum + eps))
+
+        total_moves = int(tok_sum.sum().item())
+        total_illegal = int(illegal_sum.sum().item())
+        total_legal = total_moves - total_illegal
+        legality_rate = total_legal / total_moves if total_moves > 0 else 0.0
+
+        return {
+            "total_moves": total_moves,
+            "legal_moves": total_legal,
+            "illegal_moves": total_illegal,
+            "legality_rate": legality_rate,
+            "legality_per_group": legality_per_group.cpu().tolist(),
+            "moves_per_group": tok_sum.cpu().tolist(),
+            "group_labels": [
+                f"[{pos_bins[b]},{pos_bins[b + 1]}) {'even' if p == 0 else 'odd'}"
+                for b in range(nb)
+                for p in (0, 1)
+            ],
+        }

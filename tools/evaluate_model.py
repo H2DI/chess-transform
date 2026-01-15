@@ -72,7 +72,7 @@ def main():
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-    
+
     print(f"Using device: {device}")
 
     # Validate data path
@@ -97,7 +97,11 @@ def main():
 
     # Run evaluation
     with torch.no_grad():
-        metrics = evaluator.compute_prediction_metrics_by_pos_bucket_parity(
+        metrics = evaluator.metrics_by_pos_bucket_parity(
+            batch_size=args.batch_size,
+            max_games=args.max_games,
+        )
+        legality_metrics = evaluator.compute_legality_metrics(
             batch_size=args.batch_size,
             max_games=args.max_games,
         )
@@ -113,6 +117,7 @@ def main():
             "timestamp": datetime.now().isoformat(),
         },
         "metrics": metrics,
+        "legality": legality_metrics,
     }
 
     # Determine output path
@@ -128,9 +133,9 @@ def main():
     # Write report
     with open(output_path, "w") as f:
         json.dump(report, f, indent=2)
-    
+
     print(f"\nReport saved to: {output_path}")
-    
+
     # Print summary
     overall = metrics["overall"]
     print("\n" + "=" * 50)
@@ -142,6 +147,9 @@ def main():
     print("\nTop-k Accuracy:")
     for k, score in overall["topk_scores"].items():
         print(f"  Top-{k}: {score * 100:.2f}%")
+    print("\nLegality (greedy argmax):")
+    print(f"  Legal moves: {legality_metrics['legality_rate'] * 100:.2f}%")
+    print(f"  ({legality_metrics['legal_moves']:,} / {legality_metrics['total_moves']:,})")
     print("=" * 50)
 
 

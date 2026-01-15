@@ -4,6 +4,7 @@ from .game_engine import ChessGameEngine
 from .training.trainer_runner import ChessTrainerRunner
 from .datasets.datasets import ChessDataset, build_dataloader
 from .configs import ModelConfig
+from .evaluation.test_loss import Evaluator
 from .utils.save_and_load import (
     load_model_from_checkpoint,
     load_model_from_hf,
@@ -26,6 +27,7 @@ __all__ = [
     "clone_model",
     "get_latest_checkpoint",
     "ModelConfig",
+    "Evaluator",
 ]
 
 __version__ = "0.1.0"

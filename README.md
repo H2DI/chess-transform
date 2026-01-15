@@ -3,6 +3,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.4+-red.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-yellow)](https://huggingface.co/h2di/chess-transform-gamba-rossa)
 
 A PyTorch implementation of a decoder-only Transformer for chess move prediction. The model learns to play chess through imitation learning on grandmaster games, predicting move sequences as tokens.
 
@@ -15,7 +16,6 @@ A PyTorch implementation of a decoder-only Transformer for chess move prediction
 
 - **450M parameter Transformer** based on the Qwen architecture
 - **Custom move tokenization**: FromToPromotion format (e.g., `e2e4`, `e7e8pq`)
-- **Rotary Position Embeddings (RoPE)** for sequence modeling
 - **Group Query Attention** for efficient inference
 - **Linear probing tools** for interpretability research
 
@@ -26,9 +26,10 @@ A PyTorch implementation of a decoder-only Transformer for chess move prediction
 git clone https://github.com/yourusername/chess-transform.git
 cd chess-transform
 
-# Create a virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Create a conda environment and activate it
+conda create -n myenv python=3.9 -y
+conda activate myenv
+
 
 # Install the package
 pip install -e .
@@ -42,17 +43,14 @@ pip install -r requirements.txt
 ### Playing Games with a Trained Model
 
 ```python
-from chess_seq import load_model, MoveEncoder, ChessGameEngine
+from chess_seq import load_model_from_hf, MoveEncoder, ChessGameEngine
 import torch
 
-# Load the model
-model, config, info = load_model("gamba_rossa", special_name="final")
+# Load the model from Hugging Face Hub (auto-downloads on first run)
+model, config, encoder = load_model_from_hf()
 model.eval()
 
-# Initialize encoder and game engine
-encoder = MoveEncoder()
-encoder.build()
-
+# Set up device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
 
@@ -142,6 +140,52 @@ The model achieves strong play when illegal moves are masked during inference:
 - **Self-play**: Generates coherent full games
 - **Live testing**: Available on [Lichess as GambaRossa](https://lichess.org/@/GambaRossa/all)
 - **Sample games**: [Lichess Study](https://lichess.org/study/ZbXAbPvL)
+
+## Evaluation
+
+We provide tools to evaluate the model on held-out games. Below are results on 640 Magnus Carlsen games:
+
+| Metric | Value |
+|--------|-------|
+| Top-1 Accuracy | 51.49% |
+| Top-5 Accuracy | 88.32% |
+| Perplexity | 4.58 |
+| Legality Rate | 99.87% |
+
+### Reproducing the Evaluation
+
+1. **Download the model from Hugging Face:**
+
+```python
+from chess_seq import load_model_from_hf
+model, config, encoder = load_model_from_hf()  # Downloads to checkpoints/gamba_rossa/
+```
+
+2. **Download Magnus Carlsen games and preprocess:**
+
+```bash
+python scripts/download_games.py
+```
+
+This downloads games from [pgnmentor.com](https://www.pgnmentor.com/players/Carlsen.zip) and saves tokenized data to `data/carlsen_games/`.
+
+3. **Run the evaluation:**
+
+```bash
+python tools/evaluate_model.py \
+    --data data/carlsen_games/shard_00000.npz \
+    --output reports/carlsen_evaluation.json
+```
+
+4. **Generate a Markdown report with plots:**
+
+```bash
+python tools/generate_report_markdown.py \
+    --input reports/carlsen_evaluation.json \
+    --output reports/carlsen_report.md
+```
+
+The generated report includes accuracy breakdowns by ply range and side (White/Black).
 
 ## Future Work
 

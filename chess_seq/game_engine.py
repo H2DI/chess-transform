@@ -2,13 +2,13 @@ import numpy as np
 import random
 import chess
 import torch
-from torch import nn
 
 from .encoder import InvalidMove, MoveEncoder
+from .models import ChessNet
 
 
 class ChessGameEngine:
-    def __init__(self, model: nn.Module, encoder: MoveEncoder, device=None):
+    def __init__(self, model: ChessNet, encoder: MoveEncoder, device=None):
         self.model = model
         self.encoder = encoder
         self.device = device if device else next(model.parameters()).device
@@ -22,14 +22,13 @@ class ChessGameEngine:
         outputs a sequence of tokens, regardless of whether this gives a proper
         chess game
         """
-        model = self.model
 
         if sequence is None:
             sequence = torch.tensor(
                 np.array([[self.start_token_id]]), device=self.device
             )
         for _ in range(n_plies):
-            out = model(sequence)  # B, T, vocab_size
+            out = self.model(sequence)  # B, T, vocab_size
             next_id = out[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
             sequence = torch.cat((sequence, next_id), dim=1)
             if sequence[0, -1].cpu().numpy() == self.end_token_id:
@@ -38,11 +37,16 @@ class ChessGameEngine:
 
     @torch.no_grad()
     def play_game(
-        self, game=None, n_plies=30, record_pgn=True, greedy=True, mask_illegal=False
+        self,
+        game: chess.Board = None,
+        n_plies=30,
+        record_pgn=True,
+        greedy=True,
+        mask_illegal=False,
     ):
         """
-        Plays a chess game. A random move is chosen if the model's output is not a valid
-        move.
+        Self-plays a chess game.
+        A random move is chosen if the model's output is not a valid move.
         """
 
         if game is None:
@@ -67,7 +71,7 @@ class ChessGameEngine:
             pgn_game = None
             node = None
 
-        current_ply = 1
+        current_ply = game.ply()
         bad_plies = []
 
         for _ in range(n_plies):
@@ -137,7 +141,7 @@ class ChessGameEngine:
         return game, node, bad_plies, sequence
 
     @torch.no_grad()
-    def _play_from_token(self, token_id, game, node, record_pgn):
+    def _play_from_token(self, token_id, game: chess.Board, node, record_pgn):
         """
         Takes the token and:
         - plays the move if it is valid
