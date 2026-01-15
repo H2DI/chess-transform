@@ -7,10 +7,11 @@ from torch.nn.utils.rnn import pad_sequence
 
 
 class ChessDataset(IterableDataset):
-    def __init__(self, npz_path, shuffle=False):
+    def __init__(self, npz_path, shuffle=False, max_games=None):
         """
         npz_path: path to dataset_XXXXX.npz file
         shuffle: randomize order of samples
+        max_games: maximum number of games to load (None = all)
         """
         self.npz_path = npz_path
         self.shuffle = shuffle
@@ -20,6 +21,11 @@ class ChessDataset(IterableDataset):
 
         self.game_ids = data["game_ids"]  # (N,)
         self.token_ids = data["tokens"]  # (N,) object array
+
+        if max_games is not None:
+            self.game_ids = self.game_ids[:max_games]
+            self.token_ids = self.token_ids[:max_games]
+
         self.num_samples = len(self.token_ids)
 
     def __iter__(self):
@@ -37,10 +43,12 @@ def build_dataloader(
     padding_value=4610,
     max_length=500,
     shuffle=False,
+    max_games=None,
 ):
     dataset = ChessDataset(
         npz_path=npz_path,
         shuffle=shuffle,
+        max_games=max_games,
     )
 
     def collate_fn(batch_list):

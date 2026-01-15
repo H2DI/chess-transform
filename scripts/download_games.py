@@ -3,6 +3,9 @@ import io
 import urllib.request
 import zipfile
 
+import urllib.error
+
+
 from chess_seq.datasets.preprocessing import run_through_folder
 from chess_seq import MoveEncoder
 
@@ -15,7 +18,12 @@ encoder = MoveEncoder().load(ENCODER_PATH)
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
-zip_bytes = urllib.request.urlopen(URL).read()
+
+req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
+
+with urllib.request.urlopen(req, timeout=60) as r:
+    zip_bytes = r.read()
+
 
 with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
     pgn_name = next(n for n in z.namelist() if n.lower().endswith(".pgn"))
@@ -29,4 +37,4 @@ with open(out_file_full_path, "wb") as f:
 print("Saved:", out_file_full_path)
 
 # Encode to token_ids in npz file
-run_through_folder(out_file_full_path, OUT_DIR, encoder)
+run_through_folder(OUT_DIR, OUT_DIR, encoder)
