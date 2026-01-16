@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-yellow)](https://huggingface.co/h2di/chess-transform-gamba-rossa)
 
-A PyTorch implementation of a decoder-only Transformer for chess move prediction. The model learns to play chess through imitation learning on grandmaster games, predicting move sequences as tokens.
+A PyTorch implementation of a decoder-only Transformer for chess move prediction. The model learns to play chess through imitation learning on master games, predicting move sequences as tokens.
 
 <p align="center">
   <a href="https://lichess.org/@/GambaRossa/all">🎮 Play against the bot on Lichess</a> •
