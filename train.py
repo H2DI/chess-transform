@@ -28,7 +28,7 @@ training_cfg = TrainingConfig(
     num_epochs=2,
 )
 
-model_cfg = ModelConfig.from_json_file("configs/{MODEL_NAME}.json")
+model_cfg = ModelConfig.from_json_file(f"configs/{MODEL_NAME}.json")
 
 torch.set_float32_matmul_precision("high")
 

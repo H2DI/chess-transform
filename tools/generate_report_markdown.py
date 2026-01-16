@@ -63,10 +63,10 @@ def plot_metric_by_bucket_parity(
     width = 0.35
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    bars1 = ax.bar(
-        x - width / 2, even, width, label="White (even ply)", color="#4A90D9"
+    bars1 = ax.bar(x - width / 2, odd, width, label="White (odd ply)", color="#4A90D9")
+    bars2 = ax.bar(
+        x + width / 2, even, width, label="Black (even ply)", color="#D94A4A"
     )
-    bars2 = ax.bar(x + width / 2, odd, width, label="Black (odd ply)", color="#D94A4A")
 
     ax.set_xlabel("Ply Range")
     ax.set_ylabel(ylabel)
@@ -96,10 +96,10 @@ def plot_topk_accuracy(
         even, odd = reshape_by_parity(values, n_buckets)
         x = np.arange(n_buckets)
 
-        ax1.plot(x, [v * 100 for v in even], marker="o", label=f"Top-{k}")
-        ax2.plot(x, [v * 100 for v in odd], marker="o", label=f"Top-{k}")
+        ax1.plot(x, [v * 100 for v in odd], marker="o", label=f"Top-{k}")
+        ax2.plot(x, [v * 100 for v in even], marker="o", label=f"Top-{k}")
 
-    for ax, title in [(ax1, "White (even ply)"), (ax2, "Black (odd ply)")]:
+    for ax, title in [(ax1, "White (odd ply)"), (ax2, "Black (even ply)")]:
         ax.set_xlabel("Ply Range")
         ax.set_ylabel("Accuracy (%)")
         ax.set_title(f"Top-k Accuracy - {title}")
@@ -146,10 +146,10 @@ def generate_metrics_table(metrics: dict, group_labels: list[str]) -> str:
 
     for i, bucket in enumerate(bucket_labels):
         lines.append(
-            f"| {bucket} | White | {tok_even[i]:,.0f} | {ppl_even[i]:.2f} | {top1_even[i] * 100:.2f}% |"
+            f"| {bucket} | White | {tok_odd[i]:,.0f} | {ppl_odd[i]:.2f} | {top1_odd[i] * 100:.2f}% |"
         )
         lines.append(
-            f"| {bucket} | Black | {tok_odd[i]:,.0f} | {ppl_odd[i]:.2f} | {top1_odd[i] * 100:.2f}% |"
+            f"| {bucket} | Black | {tok_even[i]:,.0f} | {ppl_even[i]:.2f} | {top1_even[i] * 100:.2f}% |"
         )
 
     return "\n".join(lines)
@@ -184,10 +184,10 @@ def generate_legality_table(legality: dict) -> str:
 
     for i, bucket in enumerate(bucket_labels):
         lines.append(
-            f"| {bucket} | White | {mov_even[i]:,.0f} | {leg_even[i] * 100:.2f}% |"
+            f"| {bucket} | White | {mov_odd[i]:,.0f} | {leg_odd[i] * 100:.2f}% |"
         )
         lines.append(
-            f"| {bucket} | Black | {mov_odd[i]:,.0f} | {leg_odd[i] * 100:.2f}% |"
+            f"| {bucket} | Black | {mov_even[i]:,.0f} | {leg_even[i] * 100:.2f}% |"
         )
 
     return "\n".join(lines)

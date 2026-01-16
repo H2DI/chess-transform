@@ -115,43 +115,6 @@ chess-transform/
 └── train.py                # Training entry point
 ```
 
-## Interpretability
-
-This project includes tools for probing the model's internal representations:
-
-```python
-from chess_seq.evaluation.activation_extractor import ActivationExtractor
-from chess_seq.evaluation.probes import LinearProbe
-
-# Extract activations from specific layers
-extractor = ActivationExtractor(model, layers=[10, 14, 18])
-activations = extractor.extract(sequence)
-
-# Train probes to decode board state
-probe = LinearProbe(input_dim=1024, output_dim=768)
-```
-
-See [probes/PROBE_QUICKSTART.md](probes/PROBE_QUICKSTART.md) for detailed probing instructions.
-
-## Results
-
-The model achieves strong play when illegal moves are masked during inference:
-
-- **Self-play**: Generates coherent full games
-- **Live testing**: Available on [Lichess as GambaRossa](https://lichess.org/@/GambaRossa/all)
-- **Sample games**: [Lichess Study](https://lichess.org/study/ZbXAbPvL)
-
-## Evaluation
-
-We provide tools to evaluate the model on held-out games. Below are results on 640 Magnus Carlsen games:
-
-| Metric | Value |
-|--------|-------|
-| Top-1 Accuracy | 51.49% |
-| Top-5 Accuracy | 88.32% |
-| Perplexity | 4.58 |
-| Legality Rate | 99.87% |
-
 ### Reproducing the Evaluation
 
 1. **Download the model from Hugging Face:**
@@ -186,6 +149,36 @@ python tools/generate_report_markdown.py \
 ```
 
 The generated report includes accuracy breakdowns by ply range and side (White/Black).
+
+## Evaluation
+
+We provide tools to evaluate the model on held-out games. Below are results on a set of 640 Magnus Carlsen games:
+
+| Metric | Value |
+|--------|-------|
+| Top-1 Accuracy | 51.49% |
+| Top-5 Accuracy | 88.32% |
+| Perplexity | 4.58 |
+| Legality Rate | 99.87% |
+
+## Interpretability
+
+This project includes tools for probing the model's internal representations:
+
+```python
+from chess_seq.evaluation.activation_extractor import ActivationExtractor
+from chess_seq.evaluation.probes import LinearProbe
+
+# Extract activations from specific layers
+extractor = ActivationExtractor(model, layers=[10, 14, 18])
+activations = extractor.extract(sequence)
+
+# Train probes to decode board state
+probe = LinearProbe(input_dim=1024, output_dim=768)
+```
+
+See [probes/PROBE_QUICKSTART.md](probes/PROBE_QUICKSTART.md) for detailed probing instructions.
+
 
 ## Future Work
 
