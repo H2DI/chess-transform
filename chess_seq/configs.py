@@ -26,7 +26,7 @@ class Config:
 
 @dataclass
 class ModelConfig(Config):
-    name: str = "None"
+    name: str = "default"
     vocab_size: int = 4611
     block_size: int = 256
     k: int = 1024
