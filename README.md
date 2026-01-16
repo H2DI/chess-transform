@@ -12,13 +12,6 @@ A PyTorch implementation of a decoder-only Transformer for chess move prediction
   <a href="https://lichess.org/study/ZbXAbPvL">♟️ View sample games</a>
 </p>
 
-## Features
-
-- **450M parameter Transformer** based on the Qwen architecture
-- **Custom move tokenization**: FromToPromotion format (e.g., `e2e4`, `e7e8pq`)
-- **Group Query Attention** for efficient inference
-- **Linear probing tools** for interpretability research
-
 ## Installation
 
 ```bash
