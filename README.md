@@ -5,19 +5,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-yellow)](https://huggingface.co/h2di/chess-transform-gamba-rossa)
 
-A PyTorch implementation of a decoder-only Transformer for chess move prediction. The model learns to play chess through imitation learning on grandmaster games, predicting move sequences as tokens.
+A PyTorch implementation of a decoder-only Transformer for chess move prediction. The model learns to play chess through imitation learning on master games, predicting move sequences as tokens.
 
 <p align="center">
   <a href="https://lichess.org/@/GambaRossa/all">🎮 Play against the bot on Lichess</a> •
   <a href="https://lichess.org/study/ZbXAbPvL">♟️ View sample games</a>
 </p>
-
-## Features
-
-- **450M parameter Transformer** based on the Qwen architecture
-- **Custom move tokenization**: FromToPromotion format (e.g., `e2e4`, `e7e8pq`)
-- **Group Query Attention** for efficient inference
-- **Linear probing tools** for interpretability research
 
 ## Installation
 
@@ -40,7 +33,23 @@ pip install -r requirements.txt
 
 ## Quick Start
 
-### Playing Games with a Trained Model
+
+### Training a New Model
+
+```python
+from chess_seq import ChessTrainerRunner, ModelConfig
+from chess_seq.configs import TrainingConfig, TrainingSession
+
+runner = ChessTrainerRunner(
+    session_config=TrainingSession(model_name="my_model", device_str="cuda"),
+    model_config=ModelConfig(name="my_model"),
+    training_config=TrainingConfig(),
+)
+runner.train()
+```
+
+
+### Self-Play Games
 
 ```python
 from chess_seq import load_model_from_hf, MoveEncoder, ChessGameEngine
@@ -59,20 +68,6 @@ engine = ChessGameEngine(model, encoder, device=device)
 # Play a game (model vs itself)
 game, pgn, bad_plies = engine.play_game(n_plies=80, mask_illegal=True)
 print(pgn)
-```
-
-### Training a New Model
-
-```python
-from chess_seq import ChessTrainerRunner, ModelConfig
-from chess_seq.configs import TrainingConfig, TrainingSession
-
-runner = ChessTrainerRunner(
-    session_config=TrainingSession(model_name="my_model", device_str="cuda"),
-    model_config=ModelConfig(name="my_model"),
-    training_config=TrainingConfig(),
-)
-runner.train()
 ```
 
 ## Model Architecture
