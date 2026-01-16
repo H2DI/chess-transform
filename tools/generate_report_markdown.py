@@ -10,8 +10,6 @@ Example:
 
 import argparse
 import json
-import os
-import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt

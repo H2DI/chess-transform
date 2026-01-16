@@ -3,8 +3,6 @@ import io
 import urllib.request
 import zipfile
 
-import urllib.error
-
 
 from chess_seq.datasets.preprocessing import run_through_folder
 from chess_seq import MoveEncoder
