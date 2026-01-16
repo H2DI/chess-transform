@@ -33,7 +33,23 @@ pip install -r requirements.txt
 
 ## Quick Start
 
-### Playing Games with a Trained Model
+
+### Training a New Model
+
+```python
+from chess_seq import ChessTrainerRunner, ModelConfig
+from chess_seq.configs import TrainingConfig, TrainingSession
+
+runner = ChessTrainerRunner(
+    session_config=TrainingSession(model_name="my_model", device_str="cuda"),
+    model_config=ModelConfig(name="my_model"),
+    training_config=TrainingConfig(),
+)
+runner.train()
+```
+
+
+### Self-Play Games
 
 ```python
 from chess_seq import load_model_from_hf, MoveEncoder, ChessGameEngine
@@ -52,20 +68,6 @@ engine = ChessGameEngine(model, encoder, device=device)
 # Play a game (model vs itself)
 game, pgn, bad_plies = engine.play_game(n_plies=80, mask_illegal=True)
 print(pgn)
-```
-
-### Training a New Model
-
-```python
-from chess_seq import ChessTrainerRunner, ModelConfig
-from chess_seq.configs import TrainingConfig, TrainingSession
-
-runner = ChessTrainerRunner(
-    session_config=TrainingSession(model_name="my_model", device_str="cuda"),
-    model_config=ModelConfig(name="my_model"),
-    training_config=TrainingConfig(),
-)
-runner.train()
 ```
 
 ## Model Architecture
